@@ -1,8 +1,10 @@
 import type { Standing, Team } from "@/lib/mlb/types";
+import type { RootingGuideEntry } from "@/lib/postseason/types";
 
 type StandingsTableProps = {
   selectedTeam: Team;
   standings: Standing[];
+  games: RootingGuideEntry[];
 };
 
 function rankStandings(a: Standing, b: Standing): number {
@@ -20,11 +22,15 @@ function gamesBack(value: string): string {
 function MiniStandingsTable({
   rows,
   selectedTeam,
+  teamsPlayingToday,
+  pickedTeams,
   gamesBackField,
   emptyMessage,
 }: {
   rows: Standing[];
   selectedTeam: Team;
+  teamsPlayingToday: ReadonlySet<number>;
+  pickedTeams: ReadonlySet<number>;
   gamesBackField: "divisionGamesBack" | "wildCardGamesBack";
   emptyMessage: string;
 }) {
@@ -39,24 +45,45 @@ function MiniStandingsTable({
           <tr><th>Team</th><th>W</th><th>L</th><th>GB</th></tr>
         </thead>
         <tbody>
-          {rows.map((standing) => (
-            <tr key={standing.team.id} className={standing.team.id === selectedTeam.id ? "is-selected" : undefined}>
-              <th scope="row">
-                <span className="team-code">{standing.team.abbreviation}</span>
-                <span className="team-name">{standing.team.name}</span>
-              </th>
-              <td>{standing.wins}</td>
-              <td>{standing.losses}</td>
-              <td>{gamesBack(standing[gamesBackField])}</td>
-            </tr>
-          ))}
+          {rows.map((standing) => {
+            const isPlayingToday = teamsPlayingToday.has(standing.team.id);
+            const isPick = pickedTeams.has(standing.team.id);
+            const classes = [
+              standing.team.id === selectedTeam.id ? "is-selected" : "",
+              isPlayingToday ? "is-playing-today" : "",
+              isPick ? "is-pick" : "",
+            ].filter(Boolean).join(" ");
+
+            return (
+              <tr key={standing.team.id} className={classes || undefined}>
+                <th scope="row">
+                  <span className="team-code">{standing.team.abbreviation}</span>
+                  <span className="team-name">{standing.team.name}</span>
+                  {isPick ? (
+                    <span className="standings-status standings-status--pick">Pick</span>
+                  ) : isPlayingToday ? (
+                    <span className="standings-status standings-status--playing">Today</span>
+                  ) : null}
+                </th>
+                <td>{standing.wins}</td>
+                <td>{standing.losses}</td>
+                <td>{gamesBack(standing[gamesBackField])}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
   );
 }
 
-export function StandingsTable({ selectedTeam, standings }: StandingsTableProps) {
+export function StandingsTable({ selectedTeam, standings, games }: StandingsTableProps) {
+  const teamsPlayingToday = new Set(
+    games.flatMap((game) => [game.awayTeam.id, game.homeTeam.id]),
+  );
+  const pickedTeams = new Set(
+    games.flatMap((game) => game.rootFor ? [game.rootFor.id] : []),
+  );
   const divisionRows = standings
     .filter((standing) => standing.team.division === selectedTeam.division)
     .sort((a, b) => (a.divisionRank ?? 99) - (b.divisionRank ?? 99));
@@ -78,6 +105,11 @@ export function StandingsTable({ selectedTeam, standings }: StandingsTableProps)
         </div>
         <span className="league-pill">{selectedTeam.league}</span>
       </div>
+      <div className="standings-legend" aria-label="Standings highlights">
+        <span><i className="legend-swatch legend-swatch--playing" />Playing today</span>
+        <span><i className="legend-swatch legend-swatch--pick" />Rooting pick</span>
+        <span><i className="legend-swatch legend-swatch--selected" />Your team</span>
+      </div>
       {standings.length === 0 ? (
         <div className="empty-panel">
           Current standings are not available yet. Check back once regular-season play begins.
@@ -89,6 +121,8 @@ export function StandingsTable({ selectedTeam, standings }: StandingsTableProps)
             <MiniStandingsTable
               rows={divisionRows}
               selectedTeam={selectedTeam}
+              teamsPlayingToday={teamsPlayingToday}
+              pickedTeams={pickedTeams}
               gamesBackField="divisionGamesBack"
               emptyMessage="No division standings available."
             />
@@ -98,6 +132,8 @@ export function StandingsTable({ selectedTeam, standings }: StandingsTableProps)
             <MiniStandingsTable
               rows={wildCardRows}
               selectedTeam={selectedTeam}
+              teamsPlayingToday={teamsPlayingToday}
+              pickedTeams={pickedTeams}
               gamesBackField="wildCardGamesBack"
               emptyMessage="No Wild Card standings available."
             />

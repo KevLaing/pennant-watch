@@ -82,7 +82,11 @@ export default async function Home() {
               <span className="as-of">Games dated {data.date}</span>
             </div>
             <RootingGuideTable games={data.games} totalGames={data.scheduleGameCount} />
-            <StandingsTable selectedTeam={selectedTeam} standings={data.standings} />
+            <StandingsTable
+              selectedTeam={selectedTeam}
+              standings={data.standings}
+              games={data.games}
+            />
           </div>
         ) : null}
       </div>

@@ -281,15 +281,27 @@ button, select { font: inherit; }
 .empty-panel { color: var(--muted); line-height: 1.6; padding: 40px 28px; text-align: center; }
 
 .standings-grid { display: grid; grid-template-columns: .8fr 1.2fr; }
+.standings-legend { align-items: center; background: #f8f5ed; border-bottom: 1px solid var(--line); color: var(--muted); display: flex; flex-wrap: wrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .63rem; gap: 17px; letter-spacing: .03em; padding: 9px 22px; text-transform: uppercase; }
+.standings-legend span { align-items: center; display: inline-flex; gap: 6px; }
+.legend-swatch { border: 1px solid transparent; border-radius: 2px; display: inline-block; height: 10px; width: 10px; }
+.legend-swatch--playing { background: #e5f0f6; border-color: #82a9bc; }
+.legend-swatch--pick { background: var(--green-soft); border-color: #64a589; }
+.legend-swatch--selected { background: #fff0dc; border-color: var(--red); }
 .standings-card + .standings-card { border-left: 1px solid var(--line); }
 .standings-card h3 { border-bottom: 1px solid var(--line); color: var(--navy-800); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .72rem; letter-spacing: .09em; margin: 0; padding: 15px 22px; text-transform: uppercase; }
 .standings-table th, .standings-table td { border-bottom: 1px solid #e7e4db; font-size: .78rem; padding: 10px 16px; text-align: right; }
 .standings-table tbody tr:last-child > * { border-bottom: 0; }
 .standings-table tbody th, .standings-table thead th:first-child { text-align: left; }
 .standings-table tbody th { font-weight: 700; }
-.standings-table tr.is-selected { background: #fff0dc; box-shadow: inset 3px 0 var(--red); }
+.standings-table tr.is-playing-today { background: #edf5f8; }
+.standings-table tr.is-pick { background: var(--green-soft); }
+.standings-table tr.is-selected { box-shadow: inset 3px 0 var(--red); }
+.standings-table tr.is-selected:not(.is-pick):not(.is-playing-today) { background: #fff0dc; }
 .team-code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .team-name { color: var(--muted); display: none; font-size: .68rem; font-weight: 500; margin-left: 7px; }
+.standings-status { border-radius: 2px; display: inline-block; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .53rem; font-weight: 900; letter-spacing: .04em; margin-left: 8px; padding: 3px 5px 2px; text-transform: uppercase; vertical-align: 1px; }
+.standings-status--playing { background: #d1e5ee; color: #285f79; }
+.standings-status--pick { background: #c7e6d5; color: #0f6847; }
 .empty-compact { color: var(--muted); font-size: .8rem; padding: 20px; }
 
 footer { align-items: center; background: var(--navy-950); color: #8799a4; display: flex; font-size: .7rem; justify-content: space-between; min-height: 90px; padding: 0 5vw; }
