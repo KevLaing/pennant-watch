@@ -8,6 +8,7 @@ import type { Game, Standing, Team } from "../lib/mlb/types";
 import {
   buildRootingGuide,
   isGameRelevantToLeague,
+  pickScoreState,
 } from "../lib/postseason/rootingGuide";
 import { relativeGames } from "../lib/postseason/standings";
 import { readableTextColor } from "../lib/theme";
@@ -190,5 +191,18 @@ describe("rooting guide", () => {
     assert.equal(entry.awayScore, 4);
     assert.equal(entry.homeScore, 2);
     assert.equal(entry.rootFor?.abbreviation, "TOR");
+  });
+
+  it("reports whether the current rooting pick is winning, losing, or tied", () => {
+    const scoredGame = {
+      ...game(104, "TOR", "NYY"),
+      status: { state: "live" as const, detail: "Top 7th" },
+    };
+    const [entry] = buildRootingGuide(team("TOR"), alStandings, [scoredGame]);
+
+    assert.equal(pickScoreState(entry), null);
+    assert.equal(pickScoreState({ ...entry, awayScore: 4, homeScore: 2 }), "winning");
+    assert.equal(pickScoreState({ ...entry, awayScore: 2, homeScore: 4 }), "losing");
+    assert.equal(pickScoreState({ ...entry, awayScore: 3, homeScore: 3 }), "tied");
   });
 });

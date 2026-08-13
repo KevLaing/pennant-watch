@@ -108,6 +108,8 @@ export default async function Home() {
 
       <footer>
         <span>PennantWatch</span>
+        <p>PennantWatch is an independent fan site and is not affiliated with, endorsed by, or sponsored by Major League Baseball or any MLB club. Team names are used solely to identify the teams discussed.</p>
+      
         <p>Data from MLB Stats API · Refreshed every few minutes</p>
       </footer>
     </main>

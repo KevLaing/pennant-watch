@@ -1,5 +1,9 @@
 import { BASEBALL_TIME_ZONE } from "@/lib/mlb/date";
-import { formatImpact } from "@/lib/postseason/rootingGuide";
+import {
+  formatImpact,
+  hasGameStarted,
+  pickScoreState,
+} from "@/lib/postseason/rootingGuide";
 import type { RootingGuideEntry } from "@/lib/postseason/types";
 
 type RootingGuideTableProps = {
@@ -23,31 +27,6 @@ function impactClass(value: number): string {
   if (value > 0) return "impact impact--good";
   if (value < 0) return "impact impact--bad";
   return "impact impact--neutral";
-}
-
-function hasGameStarted(game: RootingGuideEntry): boolean {
-  return game.status.state === "live" || game.status.state === "final";
-}
-
-function pickScoreState(
-  game: RootingGuideEntry,
-): "winning" | "losing" | "tied" | null {
-  if (
-    !hasGameStarted(game) ||
-    !game.rootFor ||
-    game.awayScore === null ||
-    game.homeScore === null
-  ) {
-    return null;
-  }
-
-  const pickIsHome = game.rootFor.id === game.homeTeam.id;
-  const pickScore = pickIsHome ? game.homeScore : game.awayScore;
-  const opponentScore = pickIsHome ? game.awayScore : game.homeScore;
-
-  if (pickScore > opponentScore) return "winning";
-  if (pickScore < opponentScore) return "losing";
-  return "tied";
 }
 
 export function RootingGuideTable({ games, totalGames }: RootingGuideTableProps) {

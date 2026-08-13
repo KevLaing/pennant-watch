@@ -2,6 +2,33 @@ import type { Game, League, Standing, Team } from "../mlb/types";
 import { createPostseasonContext, postseasonStandingScore } from "./standings";
 import type { RootingGuideEntry } from "./types";
 
+export type PickScoreState = "winning" | "losing" | "tied";
+
+export function hasGameStarted(game: RootingGuideEntry): boolean {
+  return game.status.state === "live" || game.status.state === "final";
+}
+
+export function pickScoreState(
+  game: RootingGuideEntry,
+): PickScoreState | null {
+  if (
+    !hasGameStarted(game) ||
+    !game.rootFor ||
+    game.awayScore === null ||
+    game.homeScore === null
+  ) {
+    return null;
+  }
+
+  const pickIsHome = game.rootFor.id === game.homeTeam.id;
+  const pickScore = pickIsHome ? game.homeScore : game.awayScore;
+  const opponentScore = pickIsHome ? game.awayScore : game.homeScore;
+
+  if (pickScore > opponentScore) return "winning";
+  if (pickScore < opponentScore) return "losing";
+  return "tied";
+}
+
 export function isGameRelevantToLeague(game: Game, league: League): boolean {
   return game.homeTeam.league === league || game.awayTeam.league === league;
 }

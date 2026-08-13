@@ -1,5 +1,8 @@
 import type { Standing, Team } from "@/lib/mlb/types";
+import { pickScoreState } from "@/lib/postseason/rootingGuide";
 import type { RootingGuideEntry } from "@/lib/postseason/types";
+
+type PickHighlight = "neutral" | "winning" | "losing";
 
 type StandingsTableProps = {
   selectedTeam: Team;
@@ -23,14 +26,14 @@ function MiniStandingsTable({
   rows,
   selectedTeam,
   teamsPlayingToday,
-  pickedTeams,
+  pickHighlights,
   gamesBackField,
   emptyMessage,
 }: {
   rows: Standing[];
   selectedTeam: Team;
   teamsPlayingToday: ReadonlySet<number>;
-  pickedTeams: ReadonlySet<number>;
+  pickHighlights: ReadonlyMap<number, PickHighlight>;
   gamesBackField: "divisionGamesBack" | "wildCardGamesBack";
   emptyMessage: string;
 }) {
@@ -47,11 +50,11 @@ function MiniStandingsTable({
         <tbody>
           {rows.map((standing) => {
             const isPlayingToday = teamsPlayingToday.has(standing.team.id);
-            const isPick = pickedTeams.has(standing.team.id);
+            const pickHighlight = pickHighlights.get(standing.team.id);
+            const isPick = pickHighlight !== undefined;
             const classes = [
               standing.team.id === selectedTeam.id ? "is-selected" : "",
-              isPlayingToday ? "is-playing-today" : "",
-              isPick ? "is-pick" : "",
+              pickHighlight ? `is-pick-${pickHighlight}` : "",
             ].filter(Boolean).join(" ");
 
             return (
@@ -81,9 +84,18 @@ export function StandingsTable({ selectedTeam, standings, games }: StandingsTabl
   const teamsPlayingToday = new Set(
     games.flatMap((game) => [game.awayTeam.id, game.homeTeam.id]),
   );
-  const pickedTeams = new Set(
-    games.flatMap((game) => game.rootFor ? [game.rootFor.id] : []),
-  );
+  const pickHighlights = new Map<number, PickHighlight>();
+  for (const game of games) {
+    if (!game.rootFor) continue;
+
+    const scoreState = pickScoreState(game);
+    pickHighlights.set(
+      game.rootFor.id,
+      scoreState === "winning" || scoreState === "losing"
+        ? scoreState
+        : "neutral",
+    );
+  }
   const divisionRows = standings
     .filter((standing) => standing.team.division === selectedTeam.division)
     .sort((a, b) => (a.divisionRank ?? 99) - (b.divisionRank ?? 99));
@@ -106,8 +118,13 @@ export function StandingsTable({ selectedTeam, standings, games }: StandingsTabl
         <span className="league-pill">{selectedTeam.league}</span>
       </div>
       <div className="standings-legend" aria-label="Standings highlights">
-        <span><i className="legend-swatch legend-swatch--playing" />Playing today</span>
-        <span><i className="legend-swatch legend-swatch--pick" />Rooting pick</span>
+        <span><span className="standings-status standings-status--playing">Today</span>Game today</span>
+        <span>
+          <i className="legend-swatch legend-swatch--pick-neutral" />
+          <i className="legend-swatch legend-swatch--pick-winning" />
+          <i className="legend-swatch legend-swatch--pick-losing" />
+          Rooting pick
+        </span>
         <span><i className="legend-swatch legend-swatch--selected" />Your team</span>
       </div>
       {standings.length === 0 ? (
@@ -122,7 +139,7 @@ export function StandingsTable({ selectedTeam, standings, games }: StandingsTabl
               rows={divisionRows}
               selectedTeam={selectedTeam}
               teamsPlayingToday={teamsPlayingToday}
-              pickedTeams={pickedTeams}
+              pickHighlights={pickHighlights}
               gamesBackField="divisionGamesBack"
               emptyMessage="No division standings available."
             />
@@ -133,7 +150,7 @@ export function StandingsTable({ selectedTeam, standings, games }: StandingsTabl
               rows={wildCardRows}
               selectedTeam={selectedTeam}
               teamsPlayingToday={teamsPlayingToday}
-              pickedTeams={pickedTeams}
+              pickHighlights={pickHighlights}
               gamesBackField="wildCardGamesBack"
               emptyMessage="No Wild Card standings available."
             />
