@@ -33,6 +33,89 @@ export function isGameRelevantToLeague(game: Game, league: League): boolean {
   return game.homeTeam.league === league || game.awayTeam.league === league;
 }
 
+function recordStrength(a: Standing, b: Standing): number {
+  return (
+    b.winningPercentage - a.winningPercentage ||
+    b.wins - a.wins ||
+    a.losses - b.losses ||
+    a.team.id - b.team.id
+  );
+}
+
+function standingsRacePick(
+  selectedTeam: Team,
+  standings: readonly Standing[],
+  game: Game,
+): Team | null {
+  const selectedStanding = standings.find(
+    (standing) => standing.team.id === selectedTeam.id,
+  );
+  if (!selectedStanding) return null;
+
+  const divisionLeaders = new Set<number>();
+  for (const division of ["EAST", "CENTRAL", "WEST"] as const) {
+    const leader = standings
+      .filter(
+        (standing) =>
+          standing.team.league === selectedTeam.league &&
+          standing.team.division === division,
+      )
+      .sort(recordStrength)[0];
+    if (leader) divisionLeaders.add(leader.team.id);
+  }
+
+  const selectedIsDivisionLeader = divisionLeaders.has(selectedTeam.id);
+  const threatScore = (team: Team): number | null => {
+    if (team.league !== selectedTeam.league) return null;
+
+    const standing = standings.find((row) => row.team.id === team.id);
+    if (!standing) return null;
+
+    const gamesAhead =
+      (standing.wins - selectedStanding.wins +
+        selectedStanding.losses - standing.losses) / 2;
+    const isDivisionRival = team.division === selectedTeam.division;
+    let rankGap: number | null = null;
+
+    if (
+      isDivisionRival &&
+      selectedStanding.divisionRank !== null &&
+      standing.divisionRank !== null
+    ) {
+      rankGap = selectedStanding.divisionRank - standing.divisionRank;
+    } else if (
+      !selectedIsDivisionLeader &&
+      !divisionLeaders.has(team.id) &&
+      selectedStanding.wildCardRank !== null &&
+      standing.wildCardRank !== null
+    ) {
+      rankGap = selectedStanding.wildCardRank - standing.wildCardRank;
+    } else if (
+      !isDivisionRival &&
+      (selectedIsDivisionLeader || divisionLeaders.has(team.id))
+    ) {
+      return null;
+    }
+
+    if (rankGap !== null) {
+      return rankGap > 0 ? Math.max(gamesAhead, 0) + rankGap / 100 : null;
+    }
+
+    return gamesAhead > 0 ? gamesAhead : null;
+  };
+
+  const awayThreat = threatScore(game.awayTeam);
+  const homeThreat = threatScore(game.homeTeam);
+
+  if (awayThreat !== null && homeThreat === null) return game.homeTeam;
+  if (homeThreat !== null && awayThreat === null) return game.awayTeam;
+  if (awayThreat === null || homeThreat === null || awayThreat === homeThreat) {
+    return null;
+  }
+
+  return awayThreat > homeThreat ? game.awayTeam : game.homeTeam;
+}
+
 function applyOutcome(
   standings: readonly Standing[],
   game: Game,
@@ -105,6 +188,7 @@ export function buildRootingGuide(
     let rootFor: Team | null = null;
     let winImpact = homeImpact;
     let loseImpact = awayImpact;
+    const racePick = standingsRacePick(selectedTeam, standings, game);
 
     if (game.homeTeam.id === selectedTeam.id) {
       rootFor = game.homeTeam;
@@ -112,6 +196,12 @@ export function buildRootingGuide(
       rootFor = game.awayTeam;
       winImpact = awayImpact;
       loseImpact = homeImpact;
+    } else if (racePick) {
+      rootFor = racePick;
+      if (rootFor.id === game.awayTeam.id) {
+        winImpact = awayImpact;
+        loseImpact = homeImpact;
+      }
     } else if (homeImpact > awayImpact) {
       rootFor = game.homeTeam;
     } else if (awayImpact > homeImpact) {

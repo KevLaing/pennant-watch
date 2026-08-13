@@ -269,6 +269,49 @@ describe("rooting guide", () => {
     assert.equal(entry.loseImpact, 0);
   });
 
+  it("picks the opponent of each Wild Card contender ahead of the selected team", () => {
+    const standings = [
+      { ...standing("TB", 74, 46), divisionRank: 1 },
+      { ...standing("NYY", 68, 52), divisionRank: 2, wildCardRank: 1 },
+      { ...standing("BOS", 64, 56), divisionRank: 3, wildCardRank: 2 },
+      { ...standing("TOR", 59, 63), divisionRank: 4, wildCardRank: 6 },
+      { ...standing("BAL", 58, 63), divisionRank: 5, wildCardRank: 8 },
+      { ...standing("CWS", 62, 57), divisionRank: 1 },
+      { ...standing("DET", 60, 61), divisionRank: 2, wildCardRank: 3 },
+      { ...standing("MIN", 60, 62), divisionRank: 3, wildCardRank: 5 },
+      { ...standing("CLE", 59, 63), divisionRank: 4, wildCardRank: 7 },
+      { ...standing("KC", 49, 73), divisionRank: 5, wildCardRank: 10 },
+      { ...standing("HOU", 62, 60), divisionRank: 1 },
+      { ...standing("TEX", 60, 61), divisionRank: 2, wildCardRank: 4 },
+      { ...standing("SEA", 56, 65), divisionRank: 3, wildCardRank: 9 },
+      { ...standing("ATH", 47, 74), divisionRank: 4, wildCardRank: 11 },
+      { ...standing("LAA", 47, 74), divisionRank: 5, wildCardRank: 12 },
+    ];
+    const result = buildRootingGuide(team("TOR"), standings, [
+      game(105, "CLE", "DET"),
+      game(106, "TEX", "LAA"),
+    ]);
+
+    assert.equal(result[0].rootFor?.abbreviation, "CLE");
+    assert.equal(result[1].rootFor?.abbreviation, "LAA");
+  });
+
+  it("picks the farther-ahead club when two teams above the selected team play", () => {
+    const standings = [
+      { ...standing("TB", 74, 46), divisionRank: 1 },
+      { ...standing("NYY", 68, 52), divisionRank: 2, wildCardRank: 1 },
+      { ...standing("BOS", 64, 56), divisionRank: 3, wildCardRank: 2 },
+      { ...standing("TOR", 59, 63), divisionRank: 4, wildCardRank: 6 },
+    ];
+    const [entry] = buildRootingGuide(
+      team("TOR"),
+      standings,
+      [game(107, "NYY", "BOS")],
+    );
+
+    assert.equal(entry.rootFor?.abbreviation, "NYY");
+  });
+
   it("preserves the current score for presentation", () => {
     const scoredGame = {
       ...game(103, "TOR", "NYY"),
