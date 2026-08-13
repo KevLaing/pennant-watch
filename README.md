@@ -1,36 +1,109 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# PennantWatch
 
-## Getting Started
+PennantWatch turns today’s MLB schedule into a rooting guide for a selected team’s postseason race. It is a Next.js 16 App Router application with server-rendered MLB data, cookie-based team selection, and no database or authentication.
 
-First, run the development server:
+## Development
+
+Use Node.js 22 or newer. Wrangler 4 requires Node.js 22.
+
+```bash
+npm install
+npm run dev
+```
+
+The normal development command remains the Next.js development server at `http://localhost:3000`.
+
+## Cloudflare deployment
+
+PennantWatch uses the official [`@opennextjs/cloudflare`](https://opennext.js.org/cloudflare/get-started) adapter for full-stack Next.js on Cloudflare Workers.
+
+### One-time Cloudflare setup
+
+1. Log in to Cloudflare from Wrangler:
+
+   ```bash
+   npx wrangler login
+   ```
+
+2. Ensure Workers and R2 are enabled for the Cloudflare account, then create the portable cache bucket referenced by `wrangler.jsonc`:
+
+   ```bash
+   npx wrangler r2 bucket create pennant-watch-opennext-cache
+   ```
+
+   OpenNext stores Next.js fetch-cache entries in this bucket. Its Durable Object queue is declared in `wrangler.jsonc` and is created/migrated on deployment. No D1 database is needed because PennantWatch uses time-based fetch revalidation but not `revalidateTag` or `revalidatePath`.
+
+3. Deploy the Worker once:
+
+   ```bash
+   npm run deploy
+   ```
+
+4. After deployment, attach `pennantwatch.com` under the Worker’s **Settings → Domains & Routes → Add → Custom Domain**. If the domain is an active Cloudflare zone, Cloudflare creates the required DNS record. Otherwise, first add the domain to Cloudflare and update its authoritative nameservers.
+
+Do not add account IDs, route IDs, bucket IDs, or secrets to the repository. For CI, configure Cloudflare authentication as protected build secrets.
+
+### Commands
+
+Normal Next.js development:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Build the Cloudflare Worker bundle without starting it:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm run build:cloudflare
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Build and preview locally in the `workerd` runtime:
 
-## Learn More
+```bash
+npm run preview
+```
 
-To learn more about Next.js, take a look at the following resources:
+Build and deploy to Cloudflare Workers:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npm run deploy
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Generate binding types after changing `wrangler.jsonc`:
 
-## Deploy on Vercel
+```bash
+npm run cf-typegen
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Caching
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The MLB schedule and standings keep their existing Next.js revalidation windows of 60 and 180 seconds. `open-next.config.ts` maps the Next.js incremental/data cache to R2 and uses the `DOQueueHandler` Durable Object to coordinate time-based revalidation.
+
+Local preview uses Wrangler’s local emulations of these bindings. Deployment populates the configured remote cache through the OpenNext CLI.
+
+Wrangler may warn during local preview that adapter-internal Durable Objects are not available in ordinary local development. The generated OpenNext worker exports `DOQueueHandler`, and deployment/dry-run binding validation resolves it correctly; the warning only limits testing time-based queue execution locally.
+
+### Committed and generated files
+
+Committed deployment configuration:
+
+- `wrangler.jsonc` — Worker entry point, compatibility flags, assets, R2, self-reference, and Durable Object bindings.
+- `open-next.config.ts` — OpenNext R2 cache and revalidation queue overrides.
+- `public/_headers` — immutable caching for Next.js static build assets.
+- `.dev.vars.example` — safe template for local Worker environment variables.
+
+Generated output is intentionally not committed:
+
+- `.open-next/` — generated Worker and static assets.
+- `.wrangler/` — Wrangler local state.
+- `.dev.vars` — local values and potential secrets.
+- `cloudflare-env.d.ts` — optional output of `npm run cf-typegen`; regenerate it after binding changes if application code begins consuming Cloudflare bindings.
+
+## Quality checks
+
+```bash
+npm test
+npm run lint
+npm run build
+npm run build:cloudflare
+```
