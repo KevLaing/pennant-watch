@@ -327,16 +327,22 @@ main {
 .standings-table tbody tr:last-child > * { border-bottom: 0; }
 .standings-table tbody th, .standings-table thead th:first-child { text-align: left; }
 .standings-table tbody th { font-weight: 700; }
-.standings-table tr.is-pick-neutral { background: #f4f2eb; }
-.standings-table tr.is-pick-winning { background: var(--green-soft); }
-.standings-table tr.is-pick-losing { background: var(--red-soft); }
+.standings-table tr.is-score-neutral, .standings-table tr.is-score-tied { background: #f4f2eb; }
+.standings-table tr.is-score-winning { background: var(--green-soft); }
+.standings-table tr.is-score-losing { background: var(--red-soft); }
 .standings-table tr.is-selected { box-shadow: inset 3px 0 var(--red); }
-.standings-table tr.is-selected:not(.is-pick-neutral):not(.is-pick-winning):not(.is-pick-losing) { background: #fff0dc; }
+.standings-table tr.is-selected:not(.is-score-neutral):not(.is-score-tied):not(.is-score-winning):not(.is-score-losing) { background: #fff0dc; }
 .team-code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .team-name { color: var(--muted); display: none; font-size: .68rem; font-weight: 500; margin-left: 7px; }
 .standings-status { border-radius: 2px; display: inline-block; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .53rem; font-weight: 900; letter-spacing: .04em; margin-left: 8px; padding: 3px 5px 2px; text-transform: uppercase; vertical-align: 1px; }
 .standings-status--playing { background: #d1e5ee; color: #285f79; }
 .standings-status--pick { background: #c7e6d5; color: #0f6847; }
+.projection-change { display: inline-flex; flex-direction: column; gap: 2px; min-width: 118px; white-space: nowrap; }
+.projection-change strong { font-size: .67rem; }
+.projection-change small { color: var(--muted); font-size: .58rem; font-weight: 500; }
+.projection-pending, .projection-empty { color: var(--muted); font-size: .65rem; white-space: nowrap; }
+.projection-pending { font-style: italic; }
+.standings-note { border-top: 1px solid var(--line); color: var(--muted); font-size: .66rem; line-height: 1.5; margin: 0; padding: 12px 22px; }
 .empty-compact { color: var(--muted); font-size: .8rem; padding: 20px; }
 
 footer { align-items: center; background: var(--navy-950); color: white; display: flex; font-size: .7rem; justify-content: space-between; min-height: 90px; padding: 0 5vw; }

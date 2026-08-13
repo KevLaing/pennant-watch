@@ -1,5 +1,9 @@
 import type { Standing, Team } from "@/lib/mlb/types";
 import { pickScoreState } from "@/lib/postseason/rootingGuide";
+import {
+  projectLiveStandings,
+  type LiveStandingState,
+} from "@/lib/postseason/standings";
 import type { RootingGuideEntry } from "@/lib/postseason/types";
 
 type PickHighlight = "neutral" | "winning" | "losing";
@@ -22,11 +26,84 @@ function gamesBack(value: string): string {
   return value === "-" ? "—" : value;
 }
 
+function ordinal(rank: number): string {
+  const mod100 = rank % 100;
+  const suffix = mod100 >= 11 && mod100 <= 13
+    ? "th"
+    : rank % 10 === 1
+      ? "st"
+      : rank % 10 === 2
+        ? "nd"
+        : rank % 10 === 3
+          ? "rd"
+          : "th";
+  return `${rank}${suffix}`;
+}
+
+function gamesBackLabel(
+  value: string,
+  gamesBackField: "divisionGamesBack" | "wildCardGamesBack",
+): string {
+  if (value !== "-" && value !== "—") return `${value} GB`;
+  return gamesBackField === "wildCardGamesBack" ? "In position" : "Leader";
+}
+
+function ProjectionChange({
+  current,
+  projected,
+  liveState,
+  rankField,
+  gamesBackField,
+}: {
+  current: Standing;
+  projected: Standing | undefined;
+  liveState: LiveStandingState | undefined;
+  rankField: "divisionRank" | "wildCardRank";
+  gamesBackField: "divisionGamesBack" | "wildCardGamesBack";
+}) {
+  if (!liveState) return <span className="projection-empty">—</span>;
+  if (liveState === "tied" || !projected) {
+    return <span className="projection-pending">Awaiting lead</span>;
+  }
+
+  const currentRank = current[rankField];
+  const projectedRank = projected[rankField];
+  const currentGamesBack = current[gamesBackField];
+  const projectedGamesBack = projected[gamesBackField];
+  let change = "No place change";
+
+  if (projectedRank === null) {
+    change = "Division lead";
+  } else if (currentRank === null) {
+    change = `Enters at ${ordinal(projectedRank)}`;
+  } else if (projectedRank < currentRank) {
+    change = `↑ to ${ordinal(projectedRank)}`;
+  } else if (projectedRank > currentRank) {
+    change = `↓ to ${ordinal(projectedRank)}`;
+  } else if (gamesBack(currentGamesBack) !== gamesBack(projectedGamesBack)) {
+    change = `${gamesBackLabel(currentGamesBack, gamesBackField)} → ${gamesBackLabel(projectedGamesBack, gamesBackField)}`;
+  }
+
+  const projectedPosition = projectedRank === null
+    ? "Division leader"
+    : `${ordinal(projectedRank)}, ${gamesBackLabel(projectedGamesBack, gamesBackField)}`;
+
+  return (
+    <span className="projection-change">
+      <strong>{change}</strong>
+      <small>{projected.wins}–{projected.losses} · {projectedPosition}</small>
+    </span>
+  );
+}
+
 function MiniStandingsTable({
   rows,
   selectedTeam,
   teamsPlayingToday,
   pickHighlights,
+  liveStates,
+  projectedByTeam,
+  rankField,
   gamesBackField,
   emptyMessage,
 }: {
@@ -34,6 +111,9 @@ function MiniStandingsTable({
   selectedTeam: Team;
   teamsPlayingToday: ReadonlySet<number>;
   pickHighlights: ReadonlyMap<number, PickHighlight>;
+  liveStates: ReadonlyMap<number, LiveStandingState>;
+  projectedByTeam: ReadonlyMap<number, Standing>;
+  rankField: "divisionRank" | "wildCardRank";
   gamesBackField: "divisionGamesBack" | "wildCardGamesBack";
   emptyMessage: string;
 }) {
@@ -45,16 +125,18 @@ function MiniStandingsTable({
     <div className="table-scroll">
       <table className="standings-table">
         <thead>
-          <tr><th>Team</th><th>W</th><th>L</th><th>GB</th></tr>
+          <tr><th>Team</th><th>W</th><th>L</th><th>GB</th><th><abbr title="Projection if current live scores become final">Proj.</abbr></th></tr>
         </thead>
         <tbody>
           {rows.map((standing) => {
             const isPlayingToday = teamsPlayingToday.has(standing.team.id);
             const pickHighlight = pickHighlights.get(standing.team.id);
             const isPick = pickHighlight !== undefined;
+            const liveState = liveStates.get(standing.team.id);
+            const highlight = liveState ?? pickHighlight;
             const classes = [
               standing.team.id === selectedTeam.id ? "is-selected" : "",
-              pickHighlight ? `is-pick-${pickHighlight}` : "",
+              highlight ? `is-score-${highlight}` : "",
             ].filter(Boolean).join(" ");
 
             return (
@@ -62,15 +144,25 @@ function MiniStandingsTable({
                 <th scope="row">
                   <span className="team-code">{standing.team.abbreviation}</span>
                   <span className="team-name">{standing.team.name}</span>
-                  {isPick ? (
-                    <span className="standings-status standings-status--pick">Pick</span>
-                  ) : isPlayingToday ? (
+                  {isPlayingToday && (
                     <span className="standings-status standings-status--playing">Today</span>
-                  ) : null}
+                  )}
+                  {isPick && (
+                    <span className="standings-status standings-status--pick">Pick</span>
+                  )}
                 </th>
                 <td>{standing.wins}</td>
                 <td>{standing.losses}</td>
                 <td>{gamesBack(standing[gamesBackField])}</td>
+                <td>
+                  <ProjectionChange
+                    current={standing}
+                    projected={projectedByTeam.get(standing.team.id)}
+                    liveState={liveState}
+                    rankField={rankField}
+                    gamesBackField={gamesBackField}
+                  />
+                </td>
               </tr>
             );
           })}
@@ -81,6 +173,10 @@ function MiniStandingsTable({
 }
 
 export function StandingsTable({ selectedTeam, standings, games }: StandingsTableProps) {
+  const projection = projectLiveStandings(standings, games);
+  const projectedByTeam = new Map(
+    projection.standings.map((standing) => [standing.team.id, standing]),
+  );
   const teamsPlayingToday = new Set(
     games.flatMap((game) => [game.awayTeam.id, game.homeTeam.id]),
   );
@@ -119,12 +215,9 @@ export function StandingsTable({ selectedTeam, standings, games }: StandingsTabl
       </div>
       <div className="standings-legend" aria-label="Standings highlights">
         <span><span className="standings-status standings-status--playing">Today</span>Game today</span>
-        <span>
-          <i className="legend-swatch legend-swatch--pick-neutral" />
-          <i className="legend-swatch legend-swatch--pick-winning" />
-          <i className="legend-swatch legend-swatch--pick-losing" />
-          Rooting pick
-        </span>
+        <span><i className="legend-swatch legend-swatch--pick-neutral" />Tied / scheduled pick</span>
+        <span><i className="legend-swatch legend-swatch--pick-winning" />Leading</span>
+        <span><i className="legend-swatch legend-swatch--pick-losing" />Trailing</span>
         <span><i className="legend-swatch legend-swatch--selected" />Your team</span>
       </div>
       {standings.length === 0 ? (
@@ -132,30 +225,41 @@ export function StandingsTable({ selectedTeam, standings, games }: StandingsTabl
           Current standings are not available yet. Check back once regular-season play begins.
         </div>
       ) : (
-        <div className="standings-grid">
-          <article className="standings-card">
-            <h3>{selectedTeam.league} {selectedTeam.division.toLowerCase()}</h3>
-            <MiniStandingsTable
-              rows={divisionRows}
-              selectedTeam={selectedTeam}
-              teamsPlayingToday={teamsPlayingToday}
-              pickHighlights={pickHighlights}
-              gamesBackField="divisionGamesBack"
-              emptyMessage="No division standings available."
-            />
-          </article>
-          <article className="standings-card">
-            <h3>Wild Card</h3>
-            <MiniStandingsTable
-              rows={wildCardRows}
-              selectedTeam={selectedTeam}
-              teamsPlayingToday={teamsPlayingToday}
-              pickHighlights={pickHighlights}
-              gamesBackField="wildCardGamesBack"
-              emptyMessage="No Wild Card standings available."
-            />
-          </article>
-        </div>
+        <>
+          <div className="standings-grid">
+            <article className="standings-card">
+              <h3>{selectedTeam.league} {selectedTeam.division.toLowerCase()}</h3>
+              <MiniStandingsTable
+                rows={divisionRows}
+                selectedTeam={selectedTeam}
+                teamsPlayingToday={teamsPlayingToday}
+                pickHighlights={pickHighlights}
+                liveStates={projection.liveStates}
+                projectedByTeam={projectedByTeam}
+                rankField="divisionRank"
+                gamesBackField="divisionGamesBack"
+                emptyMessage="No division standings available."
+              />
+            </article>
+            <article className="standings-card">
+              <h3>Wild Card</h3>
+              <MiniStandingsTable
+                rows={wildCardRows}
+                selectedTeam={selectedTeam}
+                teamsPlayingToday={teamsPlayingToday}
+                pickHighlights={pickHighlights}
+                liveStates={projection.liveStates}
+                projectedByTeam={projectedByTeam}
+                rankField="wildCardRank"
+                gamesBackField="wildCardGamesBack"
+                emptyMessage="No Wild Card standings available."
+              />
+            </article>
+          </div>
+          <p className="standings-note">
+            Live projections treat current leaders as winners. Tied games are not applied, and official MLB tiebreakers may produce a different order.
+          </p>
+        </>
       )}
     </section>
   );

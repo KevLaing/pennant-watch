@@ -10,7 +10,10 @@ import {
   isGameRelevantToLeague,
   pickScoreState,
 } from "../lib/postseason/rootingGuide";
-import { relativeGames } from "../lib/postseason/standings";
+import {
+  projectLiveStandings,
+  relativeGames,
+} from "../lib/postseason/standings";
 import { readableTextColor } from "../lib/theme";
 
 function team(abbreviation: string): Team {
@@ -146,6 +149,93 @@ describe("games-back arithmetic", () => {
     assert.equal(entry.rootFor?.abbreviation, "LAD");
     assert.equal(entry.winImpact, 0.5);
     assert.equal(entry.loseImpact, -0.5);
+  });
+});
+
+describe("live standings projection", () => {
+  it("projects a live leader's win and a trailing team's loss", () => {
+    const standings = [
+      { ...standing("NYY", 52, 38), divisionRank: 1 },
+      { ...standing("TOR", 51, 39), divisionRank: 2 },
+      { ...standing("BOS", 48, 42), divisionRank: 3 },
+    ];
+    const liveGame = {
+      ...game(30, "TOR", "NYY"),
+      awayScore: 4,
+      homeScore: 2,
+      status: { state: "live" as const, detail: "Top 7th" },
+    };
+    const projection = projectLiveStandings(standings, [liveGame]);
+    const tor = projection.standings.find((row) => row.team.abbreviation === "TOR");
+    const nyy = projection.standings.find((row) => row.team.abbreviation === "NYY");
+
+    assert.equal(projection.liveStates.get(team("TOR").id), "winning");
+    assert.equal(projection.liveStates.get(team("NYY").id), "losing");
+    assert.deepEqual([tor?.wins, tor?.losses, tor?.divisionRank], [52, 39, 1]);
+    assert.deepEqual([nyy?.wins, nyy?.losses, nyy?.divisionRank], [52, 39, 2]);
+  });
+
+  it("leaves records unchanged while a live game is tied", () => {
+    const tiedGame = {
+      ...game(31, "TOR", "NYY"),
+      awayScore: 3,
+      homeScore: 3,
+      status: { state: "live" as const, detail: "Bottom 8th" },
+    };
+    const projection = projectLiveStandings(alStandings, [tiedGame]);
+    const tor = projection.standings.find((row) => row.team.abbreviation === "TOR");
+
+    assert.equal(projection.liveStates.get(team("TOR").id), "tied");
+    assert.deepEqual([tor?.wins, tor?.losses], [50, 40]);
+  });
+
+  it("does not project scheduled or final games", () => {
+    const finalGame = {
+      ...game(32, "TOR", "NYY"),
+      awayScore: 5,
+      homeScore: 1,
+      status: { state: "final" as const, detail: "Final" },
+    };
+    const projection = projectLiveStandings(alStandings, [
+      game(33, "BOS", "BAL"),
+      finalGame,
+    ]);
+
+    assert.equal(projection.liveStates.size, 0);
+    assert.deepEqual(
+      projection.standings.map(({ wins, losses }) => [wins, losses]),
+      alStandings.map(({ wins, losses }) => [wins, losses]),
+    );
+  });
+
+  it("calculates Wild Card GB from the third-place cutoff", () => {
+    const standings = [
+      standing("NYY", 60, 40),
+      standing("CLE", 58, 42),
+      standing("HOU", 57, 43),
+      standing("BOS", 56, 44),
+      standing("TB", 55, 45),
+      standing("BAL", 53, 47),
+      standing("TOR", 51, 48),
+    ];
+    const torLoss = {
+      ...game(34, "TOR", "LAD"),
+      awayScore: 2,
+      homeScore: 4,
+      status: { state: "live" as const, detail: "Bottom 7th" },
+    };
+    const projection = projectLiveStandings(standings, [torLoss]);
+    const tor = projection.standings.find((row) => row.team.abbreviation === "TOR");
+    const wildCardTeams = projection.standings
+      .filter((row) => row.wildCardRank !== null)
+      .sort((a, b) => (a.wildCardRank ?? 99) - (b.wildCardRank ?? 99));
+
+    assert.deepEqual(
+      wildCardTeams.slice(0, 3).map((row) => row.wildCardGamesBack),
+      ["-", "-", "-"],
+    );
+    assert.equal(tor?.wildCardRank, 4);
+    assert.equal(tor?.wildCardGamesBack, "2.0");
   });
 });
 
