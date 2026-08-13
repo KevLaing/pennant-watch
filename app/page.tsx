@@ -17,16 +17,10 @@ export default async function Home() {
   const date = getBaseballDate();
   const primaryColor = selectedTeam?.primaryColor ?? "#081824";
   const secondaryColor = selectedTeam?.secondaryColor ?? "#D7493E";
-  const theme = {
-    "--team-primary": primaryColor,
-    "--team-secondary": secondaryColor,
-    "--team-primary-contrast": readableTextColor(primaryColor),
-    "--team-secondary-contrast": readableTextColor(secondaryColor),
-    "--navy-950": primaryColor,
-    "--navy-900": primaryColor,
-    "--navy-800": primaryColor,
-    "--red": secondaryColor,
-    "--red-dark": secondaryColor,
+  const clubBarTheme = {
+    "--club-primary": primaryColor,
+    "--club-secondary": secondaryColor,
+    "--club-primary-contrast": readableTextColor(primaryColor),
   } as CSSProperties;
 
   let data = null;
@@ -41,7 +35,7 @@ export default async function Home() {
   }
 
   return (
-    <main style={theme}>
+    <main>
       <header className="site-header">
         <Link className="brand" href="/" aria-label="PennantWatch home">
           <span className="brand-mark" aria-hidden="true">PW</span>
@@ -86,7 +80,7 @@ export default async function Home() {
           </section>
         ) : data ? (
           <div className="dashboard">
-            <div className="selected-club-bar">
+            <div className="selected-club-bar" style={clubBarTheme}>
               <div>
                 <span className="selected-club-code">{selectedTeam.abbreviation}</span>
                 <div>
