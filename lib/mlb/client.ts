@@ -1,7 +1,8 @@
 import type { MlbScheduleResponse, MlbStandingsResponse } from "./types";
 
 const MLB_API_BASE = "https://statsapi.mlb.com/api/v1";
-const REVALIDATE_SECONDS = 180;
+const SCHEDULE_REVALIDATE_SECONDS = 60;
+const STANDINGS_REVALIDATE_SECONDS = 180;
 
 export class MlbApiError extends Error {
   constructor(
@@ -17,6 +18,7 @@ async function requestMlb<T>(
   resource: MlbApiError["resource"],
   pathname: string,
   params: Record<string, string>,
+  revalidate: number,
 ): Promise<T> {
   const url = new URL(`${MLB_API_BASE}/${pathname}`);
   Object.entries(params).forEach(([key, value]) => url.searchParams.set(key, value));
@@ -24,7 +26,7 @@ async function requestMlb<T>(
   try {
     const response = await fetch(url, {
       headers: { Accept: "application/json" },
-      next: { revalidate: REVALIDATE_SECONDS },
+      next: { revalidate },
     });
 
     if (!response.ok) {
@@ -39,13 +41,23 @@ async function requestMlb<T>(
 }
 
 export function fetchSchedule(date: string): Promise<MlbScheduleResponse> {
-  return requestMlb("schedule", "schedule", { sportId: "1", date });
+  return requestMlb(
+    "schedule",
+    "schedule",
+    { sportId: "1", date },
+    SCHEDULE_REVALIDATE_SECONDS,
+  );
 }
 
 export function fetchStandings(season: string): Promise<MlbStandingsResponse> {
-  return requestMlb("standings", "standings", {
-    leagueId: "103,104",
-    season,
-    standingsTypes: "regularSeason",
-  });
+  return requestMlb(
+    "standings",
+    "standings",
+    {
+      leagueId: "103,104",
+      season,
+      standingsTypes: "regularSeason",
+    },
+    STANDINGS_REVALIDATE_SECONDS,
+  );
 }

@@ -8,6 +8,8 @@ export type Team = {
   name: string;
   league: League;
   division: Division;
+  primaryColor: string;
+  secondaryColor: string;
 };
 
 export type GameState = "scheduled" | "live" | "final" | "postponed";
@@ -18,6 +20,8 @@ export type Game = {
   officialDate: string;
   awayTeam: Team;
   homeTeam: Team;
+  awayScore: number | null;
+  homeScore: number | null;
   status: {
     state: GameState;
     detail: string;
@@ -46,8 +50,8 @@ export type MlbScheduleResponse = {
         detailedState?: string;
       };
       teams?: {
-        away?: { team?: { id?: number } };
-        home?: { team?: { id?: number } };
+        away?: { score?: number; team?: { id?: number } };
+        home?: { score?: number; team?: { id?: number } };
       };
     }>;
   }>;

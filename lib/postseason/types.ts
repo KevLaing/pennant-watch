@@ -6,6 +6,8 @@ export type RootingGuideEntry = {
   status: Game["status"];
   awayTeam: Team;
   homeTeam: Team;
+  awayScore: number | null;
+  homeScore: number | null;
   rootFor: Team | null;
   winImpact: number;
   loseImpact: number;

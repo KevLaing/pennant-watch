@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { getTeamByAbbreviation } from "../lib/mlb/teams";
+import { getTeamByAbbreviation, MLB_TEAMS } from "../lib/mlb/teams";
 import type { Game, Standing, Team } from "../lib/mlb/types";
 import {
   buildRootingGuide,
   isGameRelevantToLeague,
 } from "../lib/postseason/rootingGuide";
 import { relativeGames } from "../lib/postseason/standings";
+import { readableTextColor } from "../lib/theme";
 
 function team(abbreviation: string): Team {
   const found = getTeamByAbbreviation(abbreviation);
@@ -33,6 +34,8 @@ function game(gamePk: number, away: string, home: string): Game {
     gamePk,
     awayTeam: team(away),
     homeTeam: team(home),
+    awayScore: null,
+    homeScore: null,
     gameDate: "2026-08-13T23:05:00Z",
     officialDate: "2026-08-13",
     status: { state: "scheduled", detail: "Scheduled" },
@@ -45,6 +48,21 @@ const alStandings = [
   standing("BOS", 48, 42),
   standing("BAL", 45, 45),
 ];
+
+describe("team themes", () => {
+  it("provides valid primary and secondary colors for all 30 clubs", () => {
+    assert.equal(MLB_TEAMS.length, 30);
+    for (const mlbTeam of MLB_TEAMS) {
+      assert.match(mlbTeam.primaryColor, /^#[0-9A-F]{6}$/);
+      assert.match(mlbTeam.secondaryColor, /^#[0-9A-F]{6}$/);
+    }
+  });
+
+  it("chooses readable text for both dark and bright primary colors", () => {
+    assert.equal(readableTextColor(team("TOR").primaryColor), "#FFFFFF");
+    assert.equal(readableTextColor(team("PIT").primaryColor), "#14212A");
+  });
+});
 
 describe("league relevance", () => {
   it("includes any game with an AL participant for an AL selection", () => {
@@ -117,5 +135,19 @@ describe("rooting guide", () => {
     assert.equal(entry.rootFor, null);
     assert.equal(entry.winImpact, 0);
     assert.equal(entry.loseImpact, 0);
+  });
+
+  it("preserves the current score for presentation", () => {
+    const scoredGame = {
+      ...game(103, "TOR", "NYY"),
+      awayScore: 4,
+      homeScore: 2,
+      status: { state: "live" as const, detail: "Top 7th" },
+    };
+    const [entry] = buildRootingGuide(team("TOR"), alStandings, [scoredGame]);
+
+    assert.equal(entry.awayScore, 4);
+    assert.equal(entry.homeScore, 2);
+    assert.equal(entry.rootFor?.abbreviation, "TOR");
   });
 });

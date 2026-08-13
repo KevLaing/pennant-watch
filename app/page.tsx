@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import Link from "next/link";
+import type { CSSProperties } from "react";
 import { RootingGuideTable } from "@/components/RootingGuideTable";
 import { StandingsTable } from "@/components/StandingsTable";
 import { TeamPicker } from "@/components/TeamPicker";
@@ -8,11 +9,25 @@ import { formatBaseballDate, getBaseballDate } from "@/lib/mlb/date";
 import { getTeamByAbbreviation } from "@/lib/mlb/teams";
 import { getPennantWatchData } from "@/lib/pennantWatch";
 import { TEAM_COOKIE } from "@/lib/teamSelection";
+import { readableTextColor } from "@/lib/theme";
 
 export default async function Home() {
   const cookieStore = await cookies();
   const selectedTeam = getTeamByAbbreviation(cookieStore.get(TEAM_COOKIE)?.value);
   const date = getBaseballDate();
+  const primaryColor = selectedTeam?.primaryColor ?? "#081824";
+  const secondaryColor = selectedTeam?.secondaryColor ?? "#D7493E";
+  const theme = {
+    "--team-primary": primaryColor,
+    "--team-secondary": secondaryColor,
+    "--team-primary-contrast": readableTextColor(primaryColor),
+    "--team-secondary-contrast": readableTextColor(secondaryColor),
+    "--navy-950": primaryColor,
+    "--navy-900": primaryColor,
+    "--navy-800": primaryColor,
+    "--red": secondaryColor,
+    "--red-dark": secondaryColor,
+  } as CSSProperties;
 
   let data = null;
   let errorResource: MlbApiError["resource"] | "unknown" | null = null;
@@ -26,7 +41,7 @@ export default async function Home() {
   }
 
   return (
-    <main>
+    <main style={theme}>
       <header className="site-header">
         <Link className="brand" href="/" aria-label="PennantWatch home">
           <span className="brand-mark" aria-hidden="true">PW</span>

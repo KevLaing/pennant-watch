@@ -25,6 +25,31 @@ function impactClass(value: number): string {
   return "impact impact--neutral";
 }
 
+function hasGameStarted(game: RootingGuideEntry): boolean {
+  return game.status.state === "live" || game.status.state === "final";
+}
+
+function pickScoreState(
+  game: RootingGuideEntry,
+): "winning" | "losing" | "tied" | null {
+  if (
+    !hasGameStarted(game) ||
+    !game.rootFor ||
+    game.awayScore === null ||
+    game.homeScore === null
+  ) {
+    return null;
+  }
+
+  const pickIsHome = game.rootFor.id === game.homeTeam.id;
+  const pickScore = pickIsHome ? game.homeScore : game.awayScore;
+  const opponentScore = pickIsHome ? game.awayScore : game.homeScore;
+
+  if (pickScore > opponentScore) return "winning";
+  if (pickScore < opponentScore) return "losing";
+  return "tied";
+}
+
 export function RootingGuideTable({ games, totalGames }: RootingGuideTableProps) {
   return (
     <section className="guide-section" aria-labelledby="guide-heading">
@@ -51,30 +76,52 @@ export function RootingGuideTable({ games, totalGames }: RootingGuideTableProps)
               <tr><th>Game</th><th>Root For</th><th>Win</th><th>Lose</th></tr>
             </thead>
             <tbody>
-              {games.map((game) => (
-                <tr key={game.gamePk}>
-                  <th scope="row">
-                    <span className="matchup">
-                      <span>{game.awayTeam.abbreviation}</span>
-                      <span className="matchup-at">at</span>
-                      <span>{game.homeTeam.abbreviation}</span>
-                    </span>
-                    <span className="game-status">{gameStatus(game)}</span>
-                  </th>
-                  <td>
-                    {game.rootFor ? (
-                      <span className="root-team">
-                        <span className="root-team__code">{game.rootFor.abbreviation}</span>
-                        <span className="root-team__name">{game.rootFor.name}</span>
+              {games.map((game) => {
+                const scoreState = pickScoreState(game);
+                const hasScore =
+                  hasGameStarted(game) &&
+                  game.awayScore !== null &&
+                  game.homeScore !== null;
+
+                return (
+                  <tr
+                    key={game.gamePk}
+                    className={scoreState ? `pick-${scoreState}` : undefined}
+                  >
+                    <th scope="row">
+                      <span className="matchup">
+                        <span className="matchup-team">
+                          <span>{game.awayTeam.abbreviation}</span>
+                          {hasScore && <strong>{game.awayScore}</strong>}
+                        </span>
+                        <span className="matchup-at">at</span>
+                        <span className="matchup-team">
+                          <span>{game.homeTeam.abbreviation}</span>
+                          {hasScore && <strong>{game.homeScore}</strong>}
+                        </span>
                       </span>
-                    ) : (
-                      <span className="no-preference">No preference</span>
-                    )}
-                  </td>
-                  <td className={impactClass(game.winImpact)}>{formatImpact(game.winImpact)}</td>
-                  <td className={impactClass(game.loseImpact)}>{formatImpact(game.loseImpact)}</td>
-                </tr>
-              ))}
+                      <span className="game-status">
+                        {gameStatus(game)}
+                        {scoreState === "winning" && <i className="score-state score-state--winning">Pick leads</i>}
+                        {scoreState === "losing" && <i className="score-state score-state--losing">Pick trails</i>}
+                        {scoreState === "tied" && <i className="score-state score-state--tied">Tied</i>}
+                      </span>
+                    </th>
+                    <td>
+                      {game.rootFor ? (
+                        <span className="root-team">
+                          <span className="root-team__code">{game.rootFor.abbreviation}</span>
+                          <span className="root-team__name">{game.rootFor.name}</span>
+                        </span>
+                      ) : (
+                        <span className="no-preference">No preference</span>
+                      )}
+                    </td>
+                    <td className={impactClass(game.winImpact)}>{formatImpact(game.winImpact)}</td>
+                    <td className={impactClass(game.loseImpact)}>{formatImpact(game.loseImpact)}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

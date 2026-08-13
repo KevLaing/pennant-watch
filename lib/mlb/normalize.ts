@@ -42,6 +42,8 @@ export function normalizeSchedule(payload: MlbScheduleResponse): Game[] {
         officialDate: game.officialDate,
         awayTeam,
         homeTeam,
+        awayScore: game.teams?.away?.score ?? null,
+        homeScore: game.teams?.home?.score ?? null,
         status: {
           state: normalizeState(
             game.status?.abstractGameState,

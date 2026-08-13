@@ -99,6 +99,8 @@ export function buildRootingGuide(
       status: game.status,
       awayTeam: game.awayTeam,
       homeTeam: game.homeTeam,
+      awayScore: game.awayScore,
+      homeScore: game.homeScore,
       rootFor,
       winImpact,
       loseImpact,
