@@ -1,5 +1,9 @@
 import type { Game, League, Standing, Team } from "../mlb/types";
-import { createPostseasonContext, postseasonStandingScore } from "./standings";
+import {
+  calculateRacePosition,
+  createPostseasonContext,
+  postseasonStandingScore,
+} from "./standings";
 import type { RootingGuideEntry } from "./types";
 
 export type PickScoreState = "winning" | "losing" | "tied";
@@ -116,6 +120,31 @@ function standingsRacePick(
   return awayThreat > homeThreat ? game.awayTeam : game.homeTeam;
 }
 
+function compareRacePositions(
+  first: ReturnType<typeof calculateRacePosition>,
+  second: ReturnType<typeof calculateRacePosition>,
+): number {
+  const firstDivisionLead = first.divisionRank === 1;
+  const secondDivisionLead = second.divisionRank === 1;
+  if (firstDivisionLead !== secondDivisionLead) {
+    return firstDivisionLead ? 1 : -1;
+  }
+
+  const firstWildCardRank = first.wildCardRank ?? Number.POSITIVE_INFINITY;
+  const secondWildCardRank = second.wildCardRank ?? Number.POSITIVE_INFINITY;
+  if (firstWildCardRank !== secondWildCardRank) {
+    return firstWildCardRank < secondWildCardRank ? 1 : -1;
+  }
+
+  const firstDivisionRank = first.divisionRank ?? Number.POSITIVE_INFINITY;
+  const secondDivisionRank = second.divisionRank ?? Number.POSITIVE_INFINITY;
+  if (firstDivisionRank !== secondDivisionRank) {
+    return firstDivisionRank < secondDivisionRank ? 1 : -1;
+  }
+
+  return 0;
+}
+
 function applyOutcome(
   standings: readonly Standing[],
   game: Game,
@@ -170,25 +199,44 @@ export function buildRootingGuide(
 
   const context = createPostseasonContext(standings, selectedTeam.id);
   const baseline = postseasonStandingScore(standings, context);
+  const currentPosition = calculateRacePosition(standings, selectedTeam.id);
 
   return [...uniqueRelevantGames.values()].map((game) => {
+    const homeOutcomeStandings = applyOutcome(standings, game, game.homeTeam);
+    const awayOutcomeStandings = applyOutcome(standings, game, game.awayTeam);
     const homeImpact = normalizeImpact(
       postseasonStandingScore(
-        applyOutcome(standings, game, game.homeTeam),
+        homeOutcomeStandings,
         context,
       ) - baseline,
     );
     const awayImpact = normalizeImpact(
       postseasonStandingScore(
-        applyOutcome(standings, game, game.awayTeam),
+        awayOutcomeStandings,
         context,
       ) - baseline,
+    );
+    const homePosition = calculateRacePosition(
+      homeOutcomeStandings,
+      selectedTeam.id,
+    );
+    const awayPosition = calculateRacePosition(
+      awayOutcomeStandings,
+      selectedTeam.id,
     );
 
     let rootFor: Team | null = null;
     let winImpact = homeImpact;
     let loseImpact = awayImpact;
-    const racePick = standingsRacePick(selectedTeam, standings, game);
+    let winPosition = homePosition;
+    let losePosition = awayPosition;
+    const positionComparison = compareRacePositions(homePosition, awayPosition);
+    const positionPick = positionComparison > 0
+      ? game.homeTeam
+      : positionComparison < 0
+        ? game.awayTeam
+        : null;
+    const racePick = positionPick ?? standingsRacePick(selectedTeam, standings, game);
 
     if (game.homeTeam.id === selectedTeam.id) {
       rootFor = game.homeTeam;
@@ -196,11 +244,15 @@ export function buildRootingGuide(
       rootFor = game.awayTeam;
       winImpact = awayImpact;
       loseImpact = homeImpact;
+      winPosition = awayPosition;
+      losePosition = homePosition;
     } else if (racePick) {
       rootFor = racePick;
       if (rootFor.id === game.awayTeam.id) {
         winImpact = awayImpact;
         loseImpact = homeImpact;
+        winPosition = awayPosition;
+        losePosition = homePosition;
       }
     } else if (homeImpact > awayImpact) {
       rootFor = game.homeTeam;
@@ -208,6 +260,8 @@ export function buildRootingGuide(
       rootFor = game.awayTeam;
       winImpact = awayImpact;
       loseImpact = homeImpact;
+      winPosition = awayPosition;
+      losePosition = homePosition;
     }
 
     return {
@@ -221,6 +275,9 @@ export function buildRootingGuide(
       rootFor,
       winImpact,
       loseImpact,
+      currentPosition,
+      winPosition,
+      losePosition,
     };
   });
 }

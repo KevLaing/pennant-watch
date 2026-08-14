@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { NextRequest } from "next/server";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { GET as getRootingGuide } from "../app/api/rooting-guide/route";
+import { RootingGuideTable } from "../components/RootingGuideTable";
+import { StandingsTable } from "../components/StandingsTable";
 import { fetchSchedule, MlbApiError } from "../lib/mlb/client";
 import { getTeamByAbbreviation, MLB_TEAMS } from "../lib/mlb/teams";
 import type { Game, Standing, Team } from "../lib/mlb/types";
@@ -279,7 +283,7 @@ describe("rooting guide", () => {
       { ...standing("CWS", 62, 57), divisionRank: 1 },
       { ...standing("DET", 60, 61), divisionRank: 2, wildCardRank: 3 },
       { ...standing("MIN", 60, 62), divisionRank: 3, wildCardRank: 5 },
-      { ...standing("CLE", 59, 63), divisionRank: 4, wildCardRank: 7 },
+      { ...standing("CLE", 58, 64), divisionRank: 4, wildCardRank: 7 },
       { ...standing("KC", 49, 73), divisionRank: 5, wildCardRank: 10 },
       { ...standing("HOU", 62, 60), divisionRank: 1 },
       { ...standing("TEX", 60, 61), divisionRank: 2, wildCardRank: 4 },
@@ -310,6 +314,90 @@ describe("rooting guide", () => {
     );
 
     assert.equal(entry.rootFor?.abbreviation, "NYY");
+  });
+
+  it("marks the opponent of a standings pick as a team to boo", () => {
+    const standings = [
+      { ...standing("TB", 74, 46), divisionRank: 1 },
+      { ...standing("TOR", 59, 63), divisionRank: 4, wildCardRank: 6 },
+      { ...standing("CWS", 62, 57), divisionRank: 1 },
+      { ...standing("DET", 60, 61), divisionRank: 2, wildCardRank: 3 },
+      { ...standing("HOU", 62, 60), divisionRank: 1 },
+    ];
+    const games = buildRootingGuide(
+      team("TOR"),
+      standings,
+      [game(108, "DET", "CWS")],
+    );
+    const markup = renderToStaticMarkup(createElement(StandingsTable, {
+      selectedTeam: team("TOR"),
+      standings,
+      games,
+    }));
+    const detIndex = markup.indexOf(">DET<");
+    const detRow = markup.slice(
+      markup.lastIndexOf("<tr", detIndex),
+      markup.indexOf("</tr>", detIndex),
+    );
+
+    assert.equal(games[0].rootFor?.abbreviation, "CWS");
+    assert.match(detRow, /Boo/);
+  });
+
+  it("shows a Wild Card position change when games-back impact stays neutral", () => {
+    const standings = [
+      standing("TB", 70, 20),
+      standing("BOS", 60, 30),
+      standing("BAL", 55, 35),
+      standing("DET", 53, 37),
+      standing("TEX", 52, 38),
+      standing("NYY", 50, 39),
+      standing("TOR", 50, 40),
+      standing("CLE", 70, 20),
+      standing("HOU", 70, 20),
+      standing("LAA", 30, 60),
+    ];
+    const games = buildRootingGuide(
+      team("TOR"),
+      standings,
+      [game(109, "NYY", "LAA")],
+    );
+    const markup = renderToStaticMarkup(createElement(RootingGuideTable, {
+      games,
+      totalGames: 1,
+    }));
+
+    assert.equal(games[0].rootFor?.abbreviation, "LAA");
+    assert.equal(games[0].winImpact, 0);
+    assert.equal(games[0].currentPosition.wildCardRank, 6);
+    assert.equal(games[0].winPosition.wildCardRank, 5);
+    assert.match(markup, /WC ↑1/);
+  });
+
+  it("protects Wild Card position when a trailing club plays the division leader", () => {
+    const standings = [
+      { ...standing("TB", 74, 46), divisionRank: 1 },
+      { ...standing("NYY", 68, 52), divisionRank: 2, wildCardRank: 1 },
+      { ...standing("BOS", 64, 56), divisionRank: 3, wildCardRank: 2 },
+      { ...standing("TOR", 59, 64), divisionRank: 4, wildCardRank: 7 },
+      { ...standing("BAL", 58, 63), divisionRank: 5, wildCardRank: 8 },
+      { ...standing("CWS", 62, 57), divisionRank: 1 },
+      { ...standing("DET", 60, 61), divisionRank: 2, wildCardRank: 3 },
+      { ...standing("MIN", 60, 62), divisionRank: 3, wildCardRank: 5 },
+      { ...standing("CLE", 59, 63), divisionRank: 4, wildCardRank: 6 },
+      { ...standing("HOU", 62, 60), divisionRank: 1 },
+      { ...standing("TEX", 60, 61), divisionRank: 2, wildCardRank: 4 },
+    ];
+    const [entry] = buildRootingGuide(
+      team("TOR"),
+      standings,
+      [game(110, "BAL", "TB")],
+    );
+
+    assert.equal(entry.rootFor?.abbreviation, "TB");
+    assert.equal(entry.currentPosition.wildCardRank, 7);
+    assert.equal(entry.winPosition.wildCardRank, 7);
+    assert.equal(entry.losePosition.wildCardRank, 8);
   });
 
   it("preserves the current score for presentation", () => {

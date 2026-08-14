@@ -308,6 +308,9 @@ main {
 .impact--good { color: var(--green); }
 .impact--bad { color: #bd332c; }
 .impact--neutral { color: #7a858b; }
+.position-impact { display: block; font-size: .56rem; letter-spacing: .02em; margin-top: 3px; white-space: nowrap; }
+.position-impact--good { color: var(--green); }
+.position-impact--bad { color: #bd332c; }
 .guide-note { border-top: 1px solid var(--line); color: var(--muted); font-size: .7rem; line-height: 1.55; margin: 0; padding: 14px 28px; }
 .empty-panel { color: var(--muted); line-height: 1.6; padding: 40px 28px; text-align: center; }
 
@@ -337,6 +340,7 @@ main {
 .standings-status { border-radius: 2px; display: inline-block; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .53rem; font-weight: 900; letter-spacing: .04em; margin-left: 8px; padding: 3px 5px 2px; text-transform: uppercase; vertical-align: 1px; }
 .standings-status--playing { background: #d1e5ee; color: #285f79; }
 .standings-status--pick { background: #c7e6d5; color: #0f6847; }
+.standings-status--against { background: #f3d3cf; color: #9f2f29; }
 .projection-change { display: inline-flex; flex-direction: column; gap: 2px; min-width: 118px; white-space: nowrap; }
 .projection-change strong { font-size: .67rem; }
 .projection-change small { color: var(--muted); font-size: .58rem; font-weight: 500; }

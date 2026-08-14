@@ -49,10 +49,10 @@ export default async function Home() {
           <div className="hero-copy">
             <p className="eyebrow">A smarter scoreboard</p>
             <h1>
-              Know who to root for <span>today.</span>
+              Know who to cheer for <span>today.</span>
             </h1>
             <p className="hero-description">
-              Pick your club. We&apos;ll turn today&apos;s MLB slate into a clear guide to the games that can help its postseason standing.
+              Choose your club. We&apos;ll turn today&apos;s MLB slate into a clear guide to the games that can help its postseason standing.
             </p>
           </div>
           <TeamPicker selectedTeam={selectedTeam} prominent={!selectedTeam} />

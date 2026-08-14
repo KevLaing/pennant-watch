@@ -101,6 +101,7 @@ function MiniStandingsTable({
   selectedTeam,
   teamsPlayingToday,
   pickHighlights,
+  rootAgainstTeams,
   liveStates,
   projectedByTeam,
   rankField,
@@ -111,6 +112,7 @@ function MiniStandingsTable({
   selectedTeam: Team;
   teamsPlayingToday: ReadonlySet<number>;
   pickHighlights: ReadonlyMap<number, PickHighlight>;
+  rootAgainstTeams: ReadonlySet<number>;
   liveStates: ReadonlyMap<number, LiveStandingState>;
   projectedByTeam: ReadonlyMap<number, Standing>;
   rankField: "divisionRank" | "wildCardRank";
@@ -132,6 +134,7 @@ function MiniStandingsTable({
             const isPlayingToday = teamsPlayingToday.has(standing.team.id);
             const pickHighlight = pickHighlights.get(standing.team.id);
             const isPick = pickHighlight !== undefined;
+            const isRootAgainst = rootAgainstTeams.has(standing.team.id);
             const liveState = liveStates.get(standing.team.id);
             const highlight = liveState ?? pickHighlight;
             const classes = [
@@ -148,7 +151,10 @@ function MiniStandingsTable({
                     <span className="standings-status standings-status--playing">Today</span>
                   )}
                   {isPick && (
-                    <span className="standings-status standings-status--pick">Pick</span>
+                    <span className="standings-status standings-status--pick">Cheer</span>
+                  )}
+                  {isRootAgainst && (
+                    <span className="standings-status standings-status--against">Boo</span>
                   )}
                 </th>
                 <td>{standing.wins}</td>
@@ -181,6 +187,7 @@ export function StandingsTable({ selectedTeam, standings, games }: StandingsTabl
     games.flatMap((game) => [game.awayTeam.id, game.homeTeam.id]),
   );
   const pickHighlights = new Map<number, PickHighlight>();
+  const rootAgainstTeams = new Set<number>();
   for (const game of games) {
     if (!game.rootFor) continue;
 
@@ -190,6 +197,11 @@ export function StandingsTable({ selectedTeam, standings, games }: StandingsTabl
       scoreState === "winning" || scoreState === "losing"
         ? scoreState
         : "neutral",
+    );
+    rootAgainstTeams.add(
+      game.rootFor.id === game.awayTeam.id
+        ? game.homeTeam.id
+        : game.awayTeam.id,
     );
   }
   const divisionRows = standings
@@ -215,7 +227,8 @@ export function StandingsTable({ selectedTeam, standings, games }: StandingsTabl
       </div>
       <div className="standings-legend" aria-label="Standings highlights">
         <span><span className="standings-status standings-status--playing">Today</span>Game today</span>
-        <span><i className="legend-swatch legend-swatch--pick-neutral" />Tied / scheduled pick</span>
+        <span><span className="standings-status standings-status--against">Boo</span>Preferred loss</span>
+        <span><i className="legend-swatch legend-swatch--pick-neutral" />Tied / scheduled cheer</span>
         <span><i className="legend-swatch legend-swatch--pick-winning" />Leading</span>
         <span><i className="legend-swatch legend-swatch--pick-losing" />Trailing</span>
         <span><i className="legend-swatch legend-swatch--selected" />Your team</span>
@@ -234,6 +247,7 @@ export function StandingsTable({ selectedTeam, standings, games }: StandingsTabl
                 selectedTeam={selectedTeam}
                 teamsPlayingToday={teamsPlayingToday}
                 pickHighlights={pickHighlights}
+                rootAgainstTeams={rootAgainstTeams}
                 liveStates={projection.liveStates}
                 projectedByTeam={projectedByTeam}
                 rankField="divisionRank"
@@ -248,6 +262,7 @@ export function StandingsTable({ selectedTeam, standings, games }: StandingsTabl
                 selectedTeam={selectedTeam}
                 teamsPlayingToday={teamsPlayingToday}
                 pickHighlights={pickHighlights}
+                rootAgainstTeams={rootAgainstTeams}
                 liveStates={projection.liveStates}
                 projectedByTeam={projectedByTeam}
                 rankField="wildCardRank"

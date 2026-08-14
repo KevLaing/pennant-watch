@@ -5,6 +5,7 @@ import {
   pickScoreState,
 } from "@/lib/postseason/rootingGuide";
 import type { RootingGuideEntry } from "@/lib/postseason/types";
+import type { RacePosition } from "@/lib/postseason/standings";
 
 type RootingGuideTableProps = {
   games: RootingGuideEntry[];
@@ -27,6 +28,42 @@ function impactClass(value: number): string {
   if (value > 0) return "impact impact--good";
   if (value < 0) return "impact impact--bad";
   return "impact impact--neutral";
+}
+
+function PositionImpact({
+  current,
+  outcome,
+}: {
+  current: RacePosition;
+  outcome: RacePosition;
+}) {
+  if (current.wildCardRank !== null && outcome.wildCardRank === null) {
+    return <small className="position-impact position-impact--good">Division lead</small>;
+  }
+
+  if (current.wildCardRank !== null && outcome.wildCardRank !== null) {
+    const change = current.wildCardRank - outcome.wildCardRank;
+    if (change !== 0) {
+      return (
+        <small className={`position-impact position-impact--${change > 0 ? "good" : "bad"}`}>
+          WC {change > 0 ? "↑" : "↓"}{Math.abs(change)}
+        </small>
+      );
+    }
+  }
+
+  if (current.divisionRank !== null && outcome.divisionRank !== null) {
+    const change = current.divisionRank - outcome.divisionRank;
+    if (change !== 0) {
+      return (
+        <small className={`position-impact position-impact--${change > 0 ? "good" : "bad"}`}>
+          DIV {change > 0 ? "↑" : "↓"}{Math.abs(change)}
+        </small>
+      );
+    }
+  }
+
+  return null;
 }
 
 export function RootingGuideTable({ games, totalGames }: RootingGuideTableProps) {
@@ -52,7 +89,7 @@ export function RootingGuideTable({ games, totalGames }: RootingGuideTableProps)
         <div className="guide-table-wrap">
           <table className="guide-table">
             <thead>
-              <tr><th>Game</th><th>Root For</th><th>Win</th><th>Lose</th></tr>
+              <tr><th>Game</th><th>Cheer</th><th>Win</th><th>Lose</th></tr>
             </thead>
             <tbody>
               {games.map((game) => {
@@ -81,8 +118,8 @@ export function RootingGuideTable({ games, totalGames }: RootingGuideTableProps)
                       </span>
                       <span className="game-status">
                         {gameStatus(game)}
-                        {scoreState === "winning" && <i className="score-state score-state--winning">Pick leads</i>}
-                        {scoreState === "losing" && <i className="score-state score-state--losing">Pick trails</i>}
+                        {scoreState === "winning" && <i className="score-state score-state--winning">Cheer leads</i>}
+                        {scoreState === "losing" && <i className="score-state score-state--losing">Cheer trails</i>}
                         {scoreState === "tied" && <i className="score-state score-state--tied">Tied</i>}
                       </span>
                     </th>
@@ -96,8 +133,14 @@ export function RootingGuideTable({ games, totalGames }: RootingGuideTableProps)
                         <span className="no-preference">No preference</span>
                       )}
                     </td>
-                    <td className={impactClass(game.winImpact)}>{formatImpact(game.winImpact)}</td>
-                    <td className={impactClass(game.loseImpact)}>{formatImpact(game.loseImpact)}</td>
+                    <td className={impactClass(game.winImpact)}>
+                      {formatImpact(game.winImpact)}
+                      <PositionImpact current={game.currentPosition} outcome={game.winPosition} />
+                    </td>
+                    <td className={impactClass(game.loseImpact)}>
+                      {formatImpact(game.loseImpact)}
+                      <PositionImpact current={game.currentPosition} outcome={game.losePosition} />
+                    </td>
                   </tr>
                 );
               })}
@@ -106,7 +149,7 @@ export function RootingGuideTable({ games, totalGames }: RootingGuideTableProps)
         </div>
       )}
       <p className="guide-note">
-        Impact is the change, in games, to the clearest current division or Wild Card path. Win and Lose refer to the team in “Root For.”
+        Impact is the change, in games, to the clearest current division or Wild Card path. Win and Lose refer to the team in “Cheer.”
       </p>
     </section>
   );

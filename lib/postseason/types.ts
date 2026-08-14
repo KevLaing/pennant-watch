@@ -1,4 +1,5 @@
 import type { Game, Standing, Team } from "../mlb/types";
+import type { RacePosition } from "./standings";
 
 export type RootingGuideEntry = {
   gamePk: number;
@@ -11,6 +12,9 @@ export type RootingGuideEntry = {
   rootFor: Team | null;
   winImpact: number;
   loseImpact: number;
+  currentPosition: RacePosition;
+  winPosition: RacePosition;
+  losePosition: RacePosition;
 };
 
 export type PennantWatchData = {
