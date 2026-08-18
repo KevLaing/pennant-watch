@@ -56,12 +56,15 @@ Evaluate the selected team's postseason state
 Compare with the current primary objective
   ↓
 Aggregate improved / unchanged / worsened,
-best / worst, position distribution, and target success count
+five movement buckets, best / worst, position distribution,
+and target success count
   ↓
 Tonight's Outcome Space overview
 ```
 
 Enumeration is deterministic and request-local. The generator uses a bitmask—bit `0` means the away team wins and bit `1` means the home team wins—and the aggregator discards each scenario's standings after evaluation. It retains only aggregate counters plus the best and worst result sets, so even a full 15-game, 32,768-scoreboard slate does not retain 32,768 standings snapshots.
+
+The visible movement distribution counts `+1`, `+0.5`, `0`, `-0.5`, and `-1` game changes directly while scenarios stream through the aggregator. Every delta uses the same baseline primary-objective boundary team; position distribution separately captures rank changes when the cutoff identity moves. Best/worst deltas and result sets remain available in the domain model but are no longer shown in the overview. If there is no active comparison team—or a doubleheader-heavy slate produces movement outside the five canonical buckets—the five-bucket widget is omitted rather than clamping or fabricating values.
 
 These counts are exhaustive possible result combinations, not probabilities. PennantWatch does not assign win probabilities, convert scenario shares into odds, or use Monte Carlo sampling.
 

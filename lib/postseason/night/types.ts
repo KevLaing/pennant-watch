@@ -30,6 +30,13 @@ export type PositionBucket = {
   count: number;
 };
 
+export type NightMovementDelta = -1 | -0.5 | 0 | 0.5 | 1;
+
+export type NightMovementBucket = {
+  delta: NightMovementDelta;
+  count: number;
+};
+
 export type NightSuccessTarget = {
   objective: RaceObjectiveKind;
   baselineWildCardRank: number | null;
@@ -47,6 +54,7 @@ export type NightOutcomeSummary = {
   worstDelta: number;
   successfulScenarioCount: number;
   target: NightSuccessTarget | null;
+  movementDistribution: NightMovementBucket[] | null;
   positionDistribution: PositionBucket[];
   fixedOutcomes: NightGameOutcome[];
   bestScenario: NightScenario;

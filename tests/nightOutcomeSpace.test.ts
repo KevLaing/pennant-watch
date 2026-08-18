@@ -5,17 +5,28 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { TonightOverview } from "../components/TonightOverview";
 import { getTeamByAbbreviation } from "../lib/mlb/teams";
 import type { Game, Standing, Team } from "../lib/mlb/types";
-import { formatNightDelta } from "../lib/postseason/night/presentation";
+import {
+  formatNightDelta,
+  formatNightMovementDelta,
+} from "../lib/postseason/night/presentation";
 import {
   applyNightOutcomes,
+  primaryRaceMargin,
   primaryObjectiveSatisfied,
 } from "../lib/postseason/night/evaluateScenario";
 import {
   createNightSlate,
   enumerateNightScenarios,
 } from "../lib/postseason/night/enumerateScenarios";
-import { buildNightOutcomeSummary } from "../lib/postseason/night/summarizeNight";
-import type { NightOutcomeSummary } from "../lib/postseason/night/types";
+import {
+  buildNightOutcomeSummary,
+  NIGHT_MOVEMENT_DELTAS,
+  normalizeNightMovementDelta,
+} from "../lib/postseason/night/summarizeNight";
+import type {
+  NightMovementDelta,
+  NightOutcomeSummary,
+} from "../lib/postseason/night/types";
 import { createPennantRaceState } from "../lib/postseason/objectives";
 import type { PennantRaceState } from "../lib/postseason/types";
 
@@ -75,6 +86,22 @@ function raceState(
   const state = createPennantRaceState(values, team(abbreviation).id);
   assert.ok(state);
   return state;
+}
+
+function movementCounts(summary: NightOutcomeSummary): Map<NightMovementDelta, number> {
+  assert.ok(summary.movementDistribution);
+  return new Map(summary.movementDistribution.map(({ delta, count }) => [delta, count]));
+}
+
+function assertMovementInvariants(summary: NightOutcomeSummary): void {
+  const counts = movementCounts(summary);
+  assert.equal(
+    summary.movementDistribution?.reduce((total, bucket) => total + bucket.count, 0),
+    summary.scenarioCount,
+  );
+  assert.equal(summary.improvedCount, (counts.get(1) ?? 0) + (counts.get(0.5) ?? 0));
+  assert.equal(summary.unchangedCount, counts.get(0) ?? 0);
+  assert.equal(summary.worsenedCount, (counts.get(-0.5) ?? 0) + (counts.get(-1) ?? 0));
 }
 
 describe("night scenario enumeration", () => {
@@ -148,6 +175,13 @@ describe("night scenario evaluation", () => {
     assert.equal(summary.unchangedCount, 1);
     assert.deepEqual(summary.bestScenario.outcomes, []);
     assert.deepEqual(summary.worstScenario.outcomes, []);
+    assert.deepEqual(summary.movementDistribution, [
+      { delta: 1, count: 0 },
+      { delta: 0.5, count: 0 },
+      { delta: 0, count: 1 },
+      { delta: -0.5, count: 0 },
+      { delta: -1, count: 0 },
+    ]);
   });
 
   it("applies a final result as fixed context without doubling the outcome space", () => {
@@ -162,6 +196,8 @@ describe("night scenario evaluation", () => {
     assert.equal(summary.scenarioCount, 1);
     assert.equal(summary.fixedGameCount, 1);
     assert.equal(summary.fixedOutcomes[0]?.winnerTeamId, team("TOR").id);
+    assert.equal(movementCounts(summary).get(0), 1);
+    assertMovementInvariants(summary);
   });
 
   it("applies all wins and losses without mutating the baseline standings", () => {
@@ -189,6 +225,69 @@ describe("night scenario evaluation", () => {
     assert.ok(summary.positionDistribution.some(({ key }) => key === "WC4"));
     assert.ok(summary.improvedCount > 0);
     assert.ok(summary.worsenedCount > 0);
+    assert.deepEqual(
+      summary.movementDistribution?.map(({ delta }) => delta),
+      [...NIGHT_MOVEMENT_DELTAS],
+    );
+    assert.deepEqual(summary.movementDistribution, [
+      { delta: 1, count: 1 },
+      { delta: 0.5, count: 0 },
+      { delta: 0, count: 2 },
+      { delta: -0.5, count: 0 },
+      { delta: -1, count: 1 },
+    ]);
+    assertMovementInvariants(summary);
+  });
+
+  it("counts positive and negative half-game movement from the selected-team game", () => {
+    const summary = buildNightOutcomeSummary(
+      team("TOR"),
+      standings(),
+      [game(1551, "TOR", "LAA")],
+    );
+    assert.ok(summary);
+    const counts = movementCounts(summary);
+    assert.equal(counts.get(1), 0);
+    assert.equal(counts.get(0.5), 1);
+    assert.equal(counts.get(0), 0);
+    assert.equal(counts.get(-0.5), 1);
+    assert.equal(counts.get(-1), 0);
+    assertMovementInvariants(summary);
+  });
+
+  it("keeps the baseline boundary team fixed when the resulting cutoff changes", () => {
+    const baseline = standings();
+    const baselineState = raceState(baseline);
+    assert.equal(
+      baselineState.primaryObjective?.boundaryTeamIds[0],
+      team("DET").id,
+    );
+    const hypothetical = applyNightOutcomes(baseline, [
+      { gamePk: 1571, winnerTeamId: team("TOR").id, loserTeamId: team("LAA").id },
+      { gamePk: 1572, winnerTeamId: team("LAA").id, loserTeamId: team("BOS").id },
+      { gamePk: 1573, winnerTeamId: team("TB").id, loserTeamId: team("BOS").id },
+    ]);
+    const resultingState = raceState(hypothetical);
+    assert.equal(
+      resultingState.primaryObjective?.boundaryTeamIds[0],
+      team("BOS").id,
+    );
+    assert.equal(
+      primaryRaceMargin(hypothetical, baselineState) -
+        primaryRaceMargin(baseline, baselineState),
+      0.5,
+    );
+
+    const summary = buildNightOutcomeSummary(team("TOR"), baseline, [
+      game(1571, "TOR", "LAA"),
+      game(1572, "BOS", "LAA"),
+      game(1573, "BOS", "TB"),
+    ]);
+    assert.ok(summary);
+    const counts = movementCounts(summary);
+    assert.equal(counts.get(0.5), 4);
+    assert.equal(counts.get(-0.5), 4);
+    assertMovementInvariants(summary);
   });
 
   it("detects WC3-to-WC2 improvement and WC3-to-WC4 worsening", () => {
@@ -213,6 +312,8 @@ describe("night scenario evaluation", () => {
     assert.equal(summary.unchangedCount, 2);
     assert.equal(summary.improvedCount, 0);
     assert.equal(summary.worsenedCount, 0);
+    assert.equal(movementCounts(summary).get(0), 2);
+    assertMovementInvariants(summary);
   });
 
   it("uses division position buckets for a division objective", () => {
@@ -324,6 +425,35 @@ describe("night scenario evaluation", () => {
     assert.equal(summary.bestScenario.outcomes.length, 15);
     assert.equal(summary.worstScenario.outcomes.length, 15);
     assert.equal("scenarios" in summary, false);
+    assert.equal(movementCounts(summary).get(0), 32_768);
+    assertMovementInvariants(summary);
+  });
+
+  it("hides the five-bucket distribution when no active boundary exists", () => {
+    const eliminated = Object.fromEntries(
+      Object.keys(BASE_RECORDS).map((abbreviation) => [abbreviation, [70, 90] as [number, number]]),
+    );
+    Object.assign(eliminated, {
+      NYY: [95, 65], BOS: [94, 66], CLE: [93, 67], DET: [92, 68],
+      HOU: [91, 69], SEA: [90, 70],
+    });
+    const summary = buildNightOutcomeSummary(team("TOR"), standings(eliminated), []);
+    assert.ok(summary);
+    assert.equal(summary.target, null);
+    assert.equal(summary.movementDistribution, null);
+  });
+
+  it("does not clamp an out-of-range doubleheader movement into the canonical buckets", () => {
+    const summary = buildNightOutcomeSummary(team("TOR"), standings(), [
+      game(2151, "TOR", "LAA"),
+      game(2152, "TOR", "LAA"),
+      game(2153, "DET", "CLE"),
+    ]);
+    assert.ok(summary);
+    assert.equal(summary.scenarioCount, 8);
+    assert.equal(summary.bestDelta, 1.5);
+    assert.equal(summary.worstDelta, -1.5);
+    assert.equal(summary.movementDistribution, null);
   });
 });
 
@@ -332,6 +462,18 @@ describe("night overview presentation", () => {
     assert.equal(formatNightDelta(1.5), "+1.5 games");
     assert.equal(formatNightDelta(-1), "-1 game");
     assert.equal(formatNightDelta(-0), "0 games");
+    assert.equal(formatNightMovementDelta(1), "+1");
+    assert.equal(formatNightMovementDelta(0.5), "+0.5");
+    assert.equal(formatNightMovementDelta(0), "0");
+    assert.equal(formatNightMovementDelta(-0.5), "-0.5");
+    assert.equal(formatNightMovementDelta(-1), "-1");
+  });
+
+  it("normalizes floating-point half games and negative zero without clamping", () => {
+    assert.equal(normalizeNightMovementDelta(0.499999999), 0.5);
+    assert.equal(normalizeNightMovementDelta(-0.500000001), -0.5);
+    assert.equal(normalizeNightMovementDelta(-0), 0);
+    assert.equal(normalizeNightMovementDelta(1.5), null);
   });
 
   it("renders the exhaustive summary and explicit non-probability disclaimer", () => {
@@ -339,14 +481,21 @@ describe("night overview presentation", () => {
       relevantGameCount: 1,
       unresolvedGameCount: 1,
       fixedGameCount: 0,
-      scenarioCount: 2,
-      improvedCount: 1,
-      unchangedCount: 0,
-      worsenedCount: 1,
+      scenarioCount: 32_768,
+      improvedCount: 16_000,
+      unchangedCount: 2_768,
+      worsenedCount: 14_000,
       bestDelta: 0.5,
       worstDelta: -0.5,
       successfulScenarioCount: 1,
       target: { objective: "MAKE_PLAYOFFS", baselineWildCardRank: 4 },
+      movementDistribution: [
+        { delta: 1, count: 10_000 },
+        { delta: 0.5, count: 6_000 },
+        { delta: 0, count: 2_768 },
+        { delta: -0.5, count: 6_000 },
+        { delta: -1, count: 8_000 },
+      ],
       positionDistribution: [{ key: "WC3", count: 1 }, { key: "WC4", count: 1 }],
       fixedOutcomes: [],
       bestScenario: { scenarioId: 0, outcomes: [{ gamePk: 2201, winnerTeamId: team("TOR").id, loserTeamId: team("LAA").id }] },
@@ -358,9 +507,23 @@ describe("night overview presentation", () => {
     }));
 
     assert.match(html, /Possible outcomes affecting/);
-    assert.match(html, /<strong>2<\/strong>/);
+    assert.match(html, /<strong>32,768<\/strong>/);
     assert.match(html, /1 possible scoreboards put TOR in WC3 or better/);
     assert.match(html, /Improve TOR&#x27;s Wild Card position/);
+    const movementLabels = ["+1", "+0.5", "0", "-0.5", "-1"];
+    const movementMarkup = html.slice(
+      html.indexOf("night-movement"),
+      html.indexOf("night-footer-grid"),
+    );
+    for (let index = 1; index < movementLabels.length; index += 1) {
+      assert.ok(
+        movementMarkup.indexOf(`>${movementLabels[index - 1]}<`) <
+        movementMarkup.indexOf(`>${movementLabels[index]}<`),
+      );
+    }
+    assert.match(html, /Tonight&#x27;s movement/);
+    assert.match(html, /10,000<\/b> scoreboards/);
+    assert.doesNotMatch(html, /Best possible night|Worst possible night|night-extremes/);
     assert.match(html, /Exhaustive result combinations, not probabilities/);
   });
 });

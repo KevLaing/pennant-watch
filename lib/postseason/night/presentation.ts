@@ -1,9 +1,13 @@
 import type { Team } from "../../mlb/types";
-import { formatGameCount } from "../format";
-import type { NightOutcomeSummary } from "./types";
+import { formatGameCount, formatGamesValue } from "../format";
+import type { NightMovementDelta, NightOutcomeSummary } from "./types";
 
 export function formatNightDelta(delta: number): string {
   return formatGameCount(delta, { signed: true });
+}
+
+export function formatNightMovementDelta(delta: NightMovementDelta): string {
+  return formatGamesValue(delta, { signed: true });
 }
 
 export function formatNightPosition(key: string): string {
@@ -52,5 +56,24 @@ export function formatNightRaceLabel(
     case "EARN_TOP_SEED":
     case "DEFEND_TOP_SEED": return `${club}'s #1 seed position`;
     case undefined: return `${club}'s postseason position`;
+  }
+}
+
+export function formatNightBoundaryLabel(
+  summary: NightOutcomeSummary,
+  selectedTeam: Team,
+): string {
+  const club = selectedTeam.abbreviation;
+  switch (summary.target?.objective) {
+    case "MAKE_PLAYOFFS":
+    case "DEFEND_PLAYOFF_SPOT":
+    case "IMPROVE_WILD_CARD_SEED": return `${club}'s current Wild Card boundary`;
+    case "WIN_DIVISION":
+    case "DEFEND_DIVISION": return `${club}'s current division boundary`;
+    case "EARN_BYE":
+    case "DEFEND_BYE": return `${club}'s current bye boundary`;
+    case "EARN_TOP_SEED":
+    case "DEFEND_TOP_SEED": return `${club}'s current #1 seed boundary`;
+    case undefined: return `${club}'s current postseason boundary`;
   }
 }

@@ -1,6 +1,8 @@
 import type { Team } from "@/lib/mlb/types";
 import {
+  formatNightBoundaryLabel,
   formatNightDelta,
+  formatNightMovementDelta,
   formatNightPosition,
   formatNightRaceLabel,
   formatNightSuccess,
@@ -18,6 +20,7 @@ export function TonightOverview({
 }: TonightOverviewProps) {
   const success = formatNightSuccess(summary, selectedTeam);
   const raceLabel = formatNightRaceLabel(summary, selectedTeam);
+  const boundaryLabel = formatNightBoundaryLabel(summary, selectedTeam);
 
   return (
     <section className="night-section" aria-labelledby="night-heading">
@@ -33,14 +36,13 @@ export function TonightOverview({
 
       <div className="night-hero">
         <div>
-          
           <strong>{summary.scenarioCount.toLocaleString("en-CA")}</strong>
-          <span>Possible outcomes affecting the {selectedTeam.name} based on {summary.relevantGameCount} relevant games for today.</span>
+          <span>Possible scoreboards affecting the {selectedTeam.name} based on {summary.relevantGameCount} relevant games for today.</span>
         </div>
         <p>
           {summary.unresolvedGameCount === 0
             ? "Tonight's relevant results are fixed, leaving one scoreboard."
-            : <>Every home-or-away winner combination across tonight&apos;s {summary.unresolvedGameCount} unresolved relevant {summary.unresolvedGameCount === 1 ? "game" : "games"}.</>}
+            : <>1 scoreboard for each of the {summary.unresolvedGameCount} unresolved relevant {summary.unresolvedGameCount === 1 ? "game" : "games"}very home-or-away winner combination across tonight&apos;s {summary.unresolvedGameCount} unresolved relevant {summary.unresolvedGameCount === 1 ? "game" : "games"}.</>}
         </p>
       </div>
 
@@ -59,20 +61,36 @@ export function TonightOverview({
         </div>
       </div>
 
-      <div className="night-extremes">
-        <article>
-          <p className="eyebrow">Best possible night</p>
-          <strong className="night-delta night-delta--good">
-            {formatNightDelta(summary.bestDelta)}
-          </strong>
-        </article>
-        <article>
-          <p className="eyebrow">Worst possible night</p>
-          <strong className="night-delta night-delta--bad">
-            {formatNightDelta(summary.worstDelta)}
-          </strong>
-        </article>
-      </div>
+      {summary.movementDistribution && (
+        <section className="night-movement" aria-labelledby="night-movement-heading">
+          <div className="night-movement__heading">
+            <h3 id="night-movement-heading">Tonight&apos;s movement</h3>
+            <span>Change at {boundaryLabel}</span>
+          </div>
+          <ul className="night-movement__buckets">
+            {summary.movementDistribution.map((bucket) => {
+              const label = formatNightMovementDelta(bucket.delta);
+              const direction = bucket.delta > 0
+                ? "good"
+                : bucket.delta < 0
+                  ? "bad"
+                  : "neutral";
+              return (
+                <li
+                  className={`night-movement__bucket night-movement__bucket--${direction}`}
+                  key={bucket.delta}
+                  aria-label={`${bucket.count.toLocaleString("en-US")} possible scoreboards produce ${formatNightDelta(bucket.delta)} of movement at ${boundaryLabel}`}
+                >
+                  <strong>{label}</strong>
+                  <span>
+                    <b>{bucket.count.toLocaleString("en-US")}</b> scoreboards
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
 
       <div className="night-footer-grid">
         <div>
