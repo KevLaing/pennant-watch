@@ -9,6 +9,7 @@ import {
   pickScoreState,
 } from "@/lib/postseason/rootingGuide";
 import type { RootingGuideEntry } from "@/lib/postseason/types";
+import { readableTextColor } from "@/lib/theme";
 
 type RootingGuideTableProps = {
   games: RootingGuideEntry[];
@@ -102,7 +103,16 @@ export function RootingGuideTable({
                     <td>
                       {game.rootFor ? (
                         <span className="root-team">
-                          <span className="root-team__code">{game.rootFor.abbreviation}</span>
+                          <span
+                            className="root-team__code"
+                            style={{
+                              backgroundColor: game.rootFor.primaryColor,
+                              borderBottomColor: game.rootFor.secondaryColor,
+                              color: readableTextColor(game.rootFor.primaryColor),
+                            }}
+                          >
+                            {game.rootFor.abbreviation}
+                          </span>
                           <span className="root-team__name">{game.rootFor.name}</span>
                         </span>
                       ) : (

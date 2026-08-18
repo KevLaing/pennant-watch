@@ -535,6 +535,14 @@ describe("daily scenario presentation", () => {
     );
     assert.doesNotMatch(markup, /<th>Win<\/th>|<th>Lose<\/th>/);
     assert.doesNotMatch(markup, /Impact is the change|Today&#x27;s leverage/);
+    assert.match(
+      markup,
+      new RegExp(`background-color:${team("TOR").primaryColor}`),
+    );
+    assert.match(
+      markup,
+      new RegExp(`border-bottom-color:${team("TOR").secondaryColor}`),
+    );
   });
 
   it("keeps neutral rows explicitly neutral", () => {
