@@ -27,7 +27,7 @@ export function TonightOverview({
       <div className="section-heading">
         <div>
           <p className="eyebrow">Tonight&apos;s scoreboard</p>
-          <h2 id="night-heading">Outcome space</h2>
+          <h2 id="night-heading">Possibile Outcomes</h2>
         </div>
         <span className="game-count">
           {summary.unresolvedGameCount} unresolved

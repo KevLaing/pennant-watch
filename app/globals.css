@@ -339,7 +339,7 @@ main {
 .score-state--losing { color: #bd332c; }
 .score-state--tied { color: #6c757a; }
 .root-team { align-items: center; display: flex; gap: 9px; }
-.root-team__code { background: var(--navy-800); border-radius: 2px; color: white; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .75rem; font-weight: 900; padding: 5px 7px; }
+.root-team__code { align-items: center; background: var(--navy-800); border-bottom: 3px solid transparent; border-radius: 2px; color: white; display: inline-flex; flex: 0 0 44px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .75rem; font-weight: 900; justify-content: center; min-height: 28px; padding: 4px 5px 3px; text-align: center; width: 44px; }
 .root-team__name { color: #58636b; font-size: .78rem; }
 .no-preference { color: var(--muted); font-size: .8rem; font-style: italic; }
 .root-reason { color: #47555e; font-size: .78rem; line-height: 1.5; min-width: 0; overflow-wrap: anywhere; }
