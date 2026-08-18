@@ -42,7 +42,7 @@ export function TonightOverview({
         <p>
           {summary.unresolvedGameCount === 0
             ? "Tonight's relevant results are fixed, leaving one scoreboard."
-            : <>1 scoreboard for each of the {summary.unresolvedGameCount} unresolved relevant {summary.unresolvedGameCount === 1 ? "game" : "games"}very home-or-away winner combination across tonight&apos;s {summary.unresolvedGameCount} unresolved relevant {summary.unresolvedGameCount === 1 ? "game" : "games"}.</>}
+            : <>1 scoreboard for every home-or-away winner combination across tonight&apos;s {summary.unresolvedGameCount} unresolved relevant {summary.unresolvedGameCount === 1 ? "game" : "games"}.</>}
         </p>
       </div>
 
