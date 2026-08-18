@@ -1,4 +1,5 @@
 import type { Division, Game, League, Standing, Team } from "../mlb/types";
+import type { RacePosition } from "./types";
 
 type ProjectableGame = {
   status: Game["status"];
@@ -15,17 +16,9 @@ export type StandingsProjection = {
   liveStates: Map<number, LiveStandingState>;
 };
 
-export type RacePosition = {
-  divisionRank: number | null;
-  wildCardRank: number | null;
-};
+export type { RacePosition } from "./types";
 
-export type PostseasonContext = {
-  selectedTeamId: number;
-  comparisonTeamIds: number[];
-};
-
-function recordStrength(a: Standing, b: Standing): number {
+export function rankStandings(a: Standing, b: Standing): number {
   return (
     b.winningPercentage - a.winningPercentage ||
     b.wins - a.wins ||
@@ -54,14 +47,16 @@ export function calculateRacePosition(
   teamId: number,
 ): RacePosition {
   const selected = standings.find((standing) => standing.team.id === teamId);
-  if (!selected) return { divisionRank: null, wildCardRank: null };
+  if (!selected) {
+    return { divisionRank: null, wildCardRank: null, leagueSeed: null };
+  }
 
   const leagueStandings = standings.filter(
     (standing) => standing.team.league === selected.team.league,
   );
   const division = leagueStandings
     .filter((standing) => standing.team.division === selected.team.division)
-    .sort(recordStrength);
+    .sort(rankStandings);
   const divisionRank = division.findIndex(
     (standing) => standing.team.id === teamId,
   ) + 1;
@@ -70,17 +65,25 @@ export function calculateRacePosition(
   for (const divisionName of ["EAST", "CENTRAL", "WEST"] as const) {
     const leader = leagueStandings
       .filter((standing) => standing.team.division === divisionName)
-      .sort(recordStrength)[0];
+      .sort(rankStandings)[0];
     if (leader) divisionLeaders.add(leader.team.id);
   }
 
   if (divisionLeaders.has(teamId)) {
-    return { divisionRank, wildCardRank: null };
+    const divisionWinners = leagueStandings
+      .filter((standing) => divisionLeaders.has(standing.team.id))
+      .sort(rankStandings);
+    return {
+      divisionRank,
+      wildCardRank: null,
+      leagueSeed:
+        divisionWinners.findIndex((standing) => standing.team.id === teamId) + 1,
+    };
   }
 
   const wildCardField = leagueStandings
     .filter((standing) => !divisionLeaders.has(standing.team.id))
-    .sort(recordStrength);
+    .sort(rankStandings);
   const wildCardIndex = wildCardField.findIndex(
     (standing) => standing.team.id === teamId,
   );
@@ -88,6 +91,9 @@ export function calculateRacePosition(
   return {
     divisionRank,
     wildCardRank: wildCardIndex >= 0 ? wildCardIndex + 1 : null,
+    leagueSeed: wildCardIndex >= 0 && wildCardIndex < 3
+      ? wildCardIndex + 4
+      : null,
   };
 }
 
@@ -150,7 +156,7 @@ export function projectLiveStandings(
   }
 
   for (const group of divisionGroups.values()) {
-    const ranked = group.sort(recordStrength);
+    const ranked = group.sort(rankStandings);
     const leader = ranked[0];
     if (!leader) continue;
     divisionLeaders.add(leader.team.id);
@@ -180,7 +186,7 @@ export function projectLiveStandings(
   }
 
   for (const field of leagueWildCards.values()) {
-    const ranked = field.sort(recordStrength);
+    const ranked = field.sort(rankStandings);
     const cutoff = ranked[Math.min(2, ranked.length - 1)];
     if (!cutoff) continue;
 
@@ -203,74 +209,4 @@ export function projectLiveStandings(
     }),
     liveStates,
   };
-}
-
-export function createPostseasonContext(
-  standings: readonly Standing[],
-  selectedTeamId: number,
-): PostseasonContext {
-  const selected = standings.find((standing) => standing.team.id === selectedTeamId);
-  if (!selected) return { selectedTeamId, comparisonTeamIds: [] };
-
-  const leagueStandings = standings.filter(
-    (standing) => standing.team.league === selected.team.league,
-  );
-  const selectedDivision = leagueStandings
-    .filter(
-      (standing) =>
-        standing.team.division === selected.team.division &&
-        standing.team.id !== selectedTeamId,
-    )
-    .sort(recordStrength);
-
-  const divisionLeaders = new Map<string, Standing>();
-  for (const standing of [...leagueStandings].sort(recordStrength)) {
-    const key = leagueDivisionKey(standing.team.league, standing.team.division);
-    if (!divisionLeaders.has(key)) divisionLeaders.set(key, standing);
-  }
-
-  const selectedIsDivisionLeader = [...divisionLeaders.values()].some(
-    (standing) => standing.team.id === selectedTeamId,
-  );
-  const wildCardField = leagueStandings
-    .filter(
-      (standing) =>
-        ![...divisionLeaders.values()].some(
-          (leader) => leader.team.id === standing.team.id,
-        ),
-    )
-    .sort(recordStrength);
-
-  const targets = new Set<number>();
-  if (selectedDivision[0]) targets.add(selectedDivision[0].team.id);
-
-  if (!selectedIsDivisionLeader) {
-    const selectedIndex = wildCardField.findIndex(
-      (standing) => standing.team.id === selectedTeamId,
-    );
-    const boundaryIndex = selectedIndex >= 0 && selectedIndex < 3 ? 3 : 2;
-    const boundary = wildCardField[boundaryIndex];
-    if (boundary && boundary.team.id !== selectedTeamId) {
-      targets.add(boundary.team.id);
-    }
-  }
-
-  return { selectedTeamId, comparisonTeamIds: [...targets] };
-}
-
-export function postseasonStandingScore(
-  standings: readonly Standing[],
-  context: PostseasonContext,
-): number {
-  const selected = standings.find(
-    (standing) => standing.team.id === context.selectedTeamId,
-  );
-  if (!selected) return 0;
-
-  const comparisons = context.comparisonTeamIds.flatMap((teamId) => {
-    const opponent = standings.find((standing) => standing.team.id === teamId);
-    return opponent ? [relativeGames(selected, opponent)] : [];
-  });
-
-  return comparisons.length > 0 ? Math.max(...comparisons) : 0;
 }

@@ -2,6 +2,32 @@
 
 PennantWatch turns today’s MLB schedule into a rooting guide for a selected team’s postseason race. It is a Next.js 16 App Router application with server-rendered MLB data, cookie-based team selection, and no database or authentication.
 
+## Postseason model
+
+PennantWatch models the current six-team postseason field in each league: three division winners seeded 1–3 and three Wild Cards seeded 4–6. Seeds 1 and 2 receive first-round byes.
+
+The domain flow is:
+
+```text
+Standings
+  ↓
+Race-state detection
+  ↓
+Active postseason objectives
+  ↓
+Hypothetical home/away game outcomes
+  ↓
+Priority-aware objective comparison
+  ↓
+Rooting recommendation + structured reasons
+```
+
+Supported objectives are making or defending a playoff spot, winning or defending a division, improving Wild Card seed, earning or defending a bye, and earning or defending the league’s top seed. A club can hold several objectives at once. The primary objective is the unresolved boundary with the greatest postseason consequence—berth, division, bye, top seed, then Wild Card seeding—and remaining objectives are retained as secondary context.
+
+Each game outcome is evaluated independently by rebuilding the selected club’s race state. Outcomes are compared lexicographically across the ordered objectives: crossing or preserving the boundary comes first, then position/rank, then games-relative margins against the relevant boundary clubs. No playoff probability, arbitrary weighted score, or Monte Carlo simulation is used.
+
+Clinching and elimination flags are deliberately conservative. With a complete 15-team league table, PennantWatch uses 162-game maximum-win bounds and marks a status only when it is guaranteed regardless of ties. The MLB standings response used here does not contain the complete head-to-head and intradivision records needed to apply every official tiebreaker, so tied maximum-win cases remain unresolved rather than being labeled clinched or eliminated. Schedule quirks such as canceled games are likewise not inferred from the standings feed.
+
 ## Development
 
 Use Node.js 22 or newer. Wrangler 4 requires Node.js 22.

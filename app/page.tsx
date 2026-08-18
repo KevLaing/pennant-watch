@@ -8,6 +8,7 @@ import { MlbApiError } from "@/lib/mlb/client";
 import { formatBaseballDate, getBaseballDate } from "@/lib/mlb/date";
 import { getTeamByAbbreviation } from "@/lib/mlb/teams";
 import { getPennantWatchData } from "@/lib/pennantWatch";
+import { formatRaceSummary } from "@/lib/postseason/presentation";
 import { TEAM_COOKIE } from "@/lib/teamSelection";
 import { readableTextColor } from "@/lib/theme";
 
@@ -33,6 +34,9 @@ export default async function Home() {
       errorResource = error instanceof MlbApiError ? error.resource : "unknown";
     }
   }
+  const raceSummary = data?.raceState
+    ? formatRaceSummary(data.raceState, data.standings)
+    : null;
 
   return (
     <main>
@@ -85,12 +89,23 @@ export default async function Home() {
                 <span className="selected-club-code">{selectedTeam.abbreviation}</span>
                 <div>
                   <p>{selectedTeam.name}</p>
-                  <span>{selectedTeam.league} {selectedTeam.division.toLowerCase()} postseason picture</span>
+                  <span className="selected-club-position">
+                    {raceSummary?.position ?? `${selectedTeam.league} ${selectedTeam.division.toLowerCase()} postseason picture`}
+                  </span>
+                  {raceSummary && (
+                    <span className="selected-club-objective">
+                      {raceSummary.objective}{raceSummary.margin ? ` · ${raceSummary.margin}` : ""}
+                    </span>
+                  )}
                 </div>
               </div>
               <span className="as-of">Games dated {data.date}</span>
             </div>
-            <RootingGuideTable games={data.games} totalGames={data.scheduleGameCount} />
+            <RootingGuideTable
+              games={data.games}
+              totalGames={data.scheduleGameCount}
+              selectedTeam={selectedTeam}
+            />
             <StandingsTable
               selectedTeam={selectedTeam}
               standings={data.standings}

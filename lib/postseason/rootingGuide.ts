@@ -1,10 +1,17 @@
 import type { Game, League, Standing, Team } from "../mlb/types";
 import {
-  calculateRacePosition,
-  createPostseasonContext,
-  postseasonStandingScore,
-} from "./standings";
-import type { RootingGuideEntry } from "./types";
+  applyGameOutcome,
+  comparePostseasonOutcomes,
+  evaluatePostseasonOutcome,
+  objectiveComparisons,
+} from "./outcomes";
+import { createPennantRaceState } from "./objectives";
+import { calculateRacePosition, relativeGames } from "./standings";
+import type {
+  PennantRaceState,
+  RootingGuideEntry,
+  RootingReason,
+} from "./types";
 
 export type PickScoreState = "winning" | "losing" | "tied";
 
@@ -37,147 +44,64 @@ export function isGameRelevantToLeague(game: Game, league: League): boolean {
   return game.homeTeam.league === league || game.awayTeam.league === league;
 }
 
-function recordStrength(a: Standing, b: Standing): number {
-  return (
-    b.winningPercentage - a.winningPercentage ||
-    b.wins - a.wins ||
-    a.losses - b.losses ||
-    a.team.id - b.team.id
-  );
+function normalizeImpact(value: number): number {
+  const rounded = Math.round(value * 2) / 2;
+  if (Object.is(rounded, -0)) return 0;
+  return Math.max(-1, Math.min(1, rounded));
 }
 
-function standingsRacePick(
-  selectedTeam: Team,
+function activeObjectives(state: PennantRaceState) {
+  return [
+    ...(state.primaryObjective ? [state.primaryObjective] : []),
+    ...state.secondaryObjectives,
+  ];
+}
+
+function activeRaceMargin(
   standings: readonly Standing[],
-  game: Game,
-): Team | null {
-  const selectedStanding = standings.find(
-    (standing) => standing.team.id === selectedTeam.id,
-  );
-  if (!selectedStanding) return null;
-
-  const divisionLeaders = new Set<number>();
-  for (const division of ["EAST", "CENTRAL", "WEST"] as const) {
-    const leader = standings
-      .filter(
-        (standing) =>
-          standing.team.league === selectedTeam.league &&
-          standing.team.division === division,
-      )
-      .sort(recordStrength)[0];
-    if (leader) divisionLeaders.add(leader.team.id);
-  }
-
-  const selectedIsDivisionLeader = divisionLeaders.has(selectedTeam.id);
-  const threatScore = (team: Team): number | null => {
-    if (team.league !== selectedTeam.league) return null;
-
-    const standing = standings.find((row) => row.team.id === team.id);
-    if (!standing) return null;
-
-    const gamesAhead =
-      (standing.wins - selectedStanding.wins +
-        selectedStanding.losses - standing.losses) / 2;
-    const isDivisionRival = team.division === selectedTeam.division;
-    let rankGap: number | null = null;
-
-    if (
-      isDivisionRival &&
-      selectedStanding.divisionRank !== null &&
-      standing.divisionRank !== null
-    ) {
-      rankGap = selectedStanding.divisionRank - standing.divisionRank;
-    } else if (
-      !selectedIsDivisionLeader &&
-      !divisionLeaders.has(team.id) &&
-      selectedStanding.wildCardRank !== null &&
-      standing.wildCardRank !== null
-    ) {
-      rankGap = selectedStanding.wildCardRank - standing.wildCardRank;
-    } else if (
-      !isDivisionRival &&
-      (selectedIsDivisionLeader || divisionLeaders.has(team.id))
-    ) {
-      return null;
-    }
-
-    if (rankGap !== null) {
-      return rankGap > 0 ? Math.max(gamesAhead, 0) + rankGap / 100 : null;
-    }
-
-    return gamesAhead > 0 ? gamesAhead : null;
-  };
-
-  const awayThreat = threatScore(game.awayTeam);
-  const homeThreat = threatScore(game.homeTeam);
-
-  if (awayThreat !== null && homeThreat === null) return game.homeTeam;
-  if (homeThreat !== null && awayThreat === null) return game.awayTeam;
-  if (awayThreat === null || homeThreat === null || awayThreat === homeThreat) {
-    return null;
-  }
-
-  return awayThreat > homeThreat ? game.awayTeam : game.homeTeam;
-}
-
-function compareRacePositions(
-  first: ReturnType<typeof calculateRacePosition>,
-  second: ReturnType<typeof calculateRacePosition>,
+  state: PennantRaceState,
 ): number {
-  const firstDivisionLead = first.divisionRank === 1;
-  const secondDivisionLead = second.divisionRank === 1;
-  if (firstDivisionLead !== secondDivisionLead) {
-    return firstDivisionLead ? 1 : -1;
-  }
+  const selected = standings.find(
+    (standing) => standing.team.id === state.selectedTeamId,
+  );
+  if (!selected) return 0;
 
-  const firstWildCardRank = first.wildCardRank ?? Number.POSITIVE_INFINITY;
-  const secondWildCardRank = second.wildCardRank ?? Number.POSITIVE_INFINITY;
-  if (firstWildCardRank !== secondWildCardRank) {
-    return firstWildCardRank < secondWildCardRank ? 1 : -1;
-  }
-
-  const firstDivisionRank = first.divisionRank ?? Number.POSITIVE_INFINITY;
-  const secondDivisionRank = second.divisionRank ?? Number.POSITIVE_INFINITY;
-  if (firstDivisionRank !== secondDivisionRank) {
-    return firstDivisionRank < secondDivisionRank ? 1 : -1;
+  for (const objective of activeObjectives(state)) {
+    const boundaryId = objective.boundaryTeamIds[0];
+    const boundary = standings.find(
+      (standing) => standing.team.id === boundaryId,
+    );
+    if (boundary) return relativeGames(selected, boundary);
   }
 
   return 0;
 }
 
-function applyOutcome(
-  standings: readonly Standing[],
+function rootingReasons(
+  state: PennantRaceState,
+  preferred: ReturnType<typeof evaluatePostseasonOutcome>,
+  other: ReturnType<typeof evaluatePostseasonOutcome>,
   game: Game,
-  winner: Team,
-): Standing[] {
-  const loserId =
-    winner.id === game.homeTeam.id ? game.awayTeam.id : game.homeTeam.id;
+  rootFor: Team,
+): RootingReason[] {
+  const loser = rootFor.id === game.homeTeam.id ? game.awayTeam : game.homeTeam;
+  const objectives = activeObjectives(state);
 
-  return standings.map((standing) => {
-    if (standing.team.id === winner.id) {
-      return {
-        ...standing,
-        wins: standing.wins + 1,
-        winningPercentage:
-          (standing.wins + 1) / (standing.wins + standing.losses + 1),
-      };
-    }
-    if (standing.team.id === loserId) {
-      return {
-        ...standing,
-        losses: standing.losses + 1,
-        winningPercentage:
-          standing.wins / (standing.wins + standing.losses + 1),
-      };
-    }
-    return standing;
+  return objectiveComparisons(preferred, other).map((kind) => {
+    const objective = objectives.find((candidate) => candidate.kind === kind);
+    const affectedTeam = rootFor.id === state.selectedTeamId
+      ? rootFor
+      : objective?.targetTeamIds.includes(loser.id)
+        ? loser
+        : objective?.targetTeamIds.includes(rootFor.id)
+          ? rootFor
+          : undefined;
+    return {
+      objective: kind,
+      ...(affectedTeam ? { affectedTeamId: affectedTeam.id } : {}),
+      impactDirection: "positive" as const,
+    };
   });
-}
-
-function normalizeImpact(value: number): number {
-  const rounded = Math.round(value * 2) / 2;
-  if (Object.is(rounded, -0)) return 0;
-  return Math.max(-1, Math.min(1, rounded));
 }
 
 export function formatImpact(impact: number): string {
@@ -197,24 +121,39 @@ export function buildRootingGuide(
     }
   }
 
-  const context = createPostseasonContext(standings, selectedTeam.id);
-  const baseline = postseasonStandingScore(standings, context);
+  const raceState = createPennantRaceState(standings, selectedTeam.id);
   const currentPosition = calculateRacePosition(standings, selectedTeam.id);
+  if (!raceState) {
+    return [...uniqueRelevantGames.values()].map((game) => ({
+      gamePk: game.gamePk,
+      gameDate: game.gameDate,
+      status: game.status,
+      awayTeam: game.awayTeam,
+      homeTeam: game.homeTeam,
+      awayScore: game.awayScore,
+      homeScore: game.homeScore,
+      rootFor: null,
+      reasons: [],
+      winImpact: 0,
+      loseImpact: 0,
+      currentPosition,
+      winPosition: currentPosition,
+      losePosition: currentPosition,
+    }));
+  }
+
+  const baselineMargin = activeRaceMargin(standings, raceState);
 
   return [...uniqueRelevantGames.values()].map((game) => {
-    const homeOutcomeStandings = applyOutcome(standings, game, game.homeTeam);
-    const awayOutcomeStandings = applyOutcome(standings, game, game.awayTeam);
+    const homeOutcomeStandings = applyGameOutcome(standings, game, game.homeTeam);
+    const awayOutcomeStandings = applyGameOutcome(standings, game, game.awayTeam);
+    const homeOutcome = evaluatePostseasonOutcome(homeOutcomeStandings, raceState);
+    const awayOutcome = evaluatePostseasonOutcome(awayOutcomeStandings, raceState);
     const homeImpact = normalizeImpact(
-      postseasonStandingScore(
-        homeOutcomeStandings,
-        context,
-      ) - baseline,
+      activeRaceMargin(homeOutcomeStandings, raceState) - baselineMargin,
     );
     const awayImpact = normalizeImpact(
-      postseasonStandingScore(
-        awayOutcomeStandings,
-        context,
-      ) - baseline,
+      activeRaceMargin(awayOutcomeStandings, raceState) - baselineMargin,
     );
     const homePosition = calculateRacePosition(
       homeOutcomeStandings,
@@ -226,42 +165,33 @@ export function buildRootingGuide(
     );
 
     let rootFor: Team | null = null;
+    let reasons: RootingReason[] = [];
     let winImpact = homeImpact;
     let loseImpact = awayImpact;
     let winPosition = homePosition;
     let losePosition = awayPosition;
-    const positionComparison = compareRacePositions(homePosition, awayPosition);
-    const positionPick = positionComparison > 0
-      ? game.homeTeam
-      : positionComparison < 0
-        ? game.awayTeam
-        : null;
-    const racePick = positionPick ?? standingsRacePick(selectedTeam, standings, game);
+    const comparison = comparePostseasonOutcomes(homeOutcome, awayOutcome, raceState);
 
     if (game.homeTeam.id === selectedTeam.id) {
       rootFor = game.homeTeam;
+      reasons = rootingReasons(raceState, homeOutcome, awayOutcome, game, rootFor);
     } else if (game.awayTeam.id === selectedTeam.id) {
       rootFor = game.awayTeam;
       winImpact = awayImpact;
       loseImpact = homeImpact;
       winPosition = awayPosition;
       losePosition = homePosition;
-    } else if (racePick) {
-      rootFor = racePick;
-      if (rootFor.id === game.awayTeam.id) {
-        winImpact = awayImpact;
-        loseImpact = homeImpact;
-        winPosition = awayPosition;
-        losePosition = homePosition;
-      }
-    } else if (homeImpact > awayImpact) {
+      reasons = rootingReasons(raceState, awayOutcome, homeOutcome, game, rootFor);
+    } else if (comparison > 0) {
       rootFor = game.homeTeam;
-    } else if (awayImpact > homeImpact) {
+      reasons = rootingReasons(raceState, homeOutcome, awayOutcome, game, rootFor);
+    } else if (comparison < 0) {
       rootFor = game.awayTeam;
       winImpact = awayImpact;
       loseImpact = homeImpact;
       winPosition = awayPosition;
       losePosition = homePosition;
+      reasons = rootingReasons(raceState, awayOutcome, homeOutcome, game, rootFor);
     }
 
     return {
@@ -273,6 +203,7 @@ export function buildRootingGuide(
       awayScore: game.awayScore,
       homeScore: game.homeScore,
       rootFor,
+      reasons,
       winImpact,
       loseImpact,
       currentPosition,

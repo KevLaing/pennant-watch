@@ -1,4 +1,6 @@
 import { BASEBALL_TIME_ZONE } from "@/lib/mlb/date";
+import type { Team } from "@/lib/mlb/types";
+import { formatRootingReasons } from "@/lib/postseason/presentation";
 import {
   formatImpact,
   hasGameStarted,
@@ -10,6 +12,7 @@ import type { RacePosition } from "@/lib/postseason/standings";
 type RootingGuideTableProps = {
   games: RootingGuideEntry[];
   totalGames: number;
+  selectedTeam?: Team;
 };
 
 const timeFormatter = new Intl.DateTimeFormat("en-US", {
@@ -37,6 +40,21 @@ function PositionImpact({
   current: RacePosition;
   outcome: RacePosition;
 }) {
+  if (
+    current.wildCardRank === null &&
+    outcome.wildCardRank === null &&
+    current.leagueSeed !== null &&
+    outcome.leagueSeed !== null &&
+    current.leagueSeed !== outcome.leagueSeed
+  ) {
+    const change = current.leagueSeed - outcome.leagueSeed;
+    return (
+      <small className={`position-impact position-impact--${change > 0 ? "good" : "bad"}`}>
+        Seed {change > 0 ? "↑" : "↓"}{Math.abs(change)}
+      </small>
+    );
+  }
+
   if (current.wildCardRank !== null && outcome.wildCardRank === null) {
     return <small className="position-impact position-impact--good">Division lead</small>;
   }
@@ -66,7 +84,11 @@ function PositionImpact({
   return null;
 }
 
-export function RootingGuideTable({ games, totalGames }: RootingGuideTableProps) {
+export function RootingGuideTable({
+  games,
+  totalGames,
+  selectedTeam,
+}: RootingGuideTableProps) {
   return (
     <section className="guide-section" aria-labelledby="guide-heading">
       <div className="section-heading">
@@ -89,7 +111,7 @@ export function RootingGuideTable({ games, totalGames }: RootingGuideTableProps)
         <div className="guide-table-wrap">
           <table className="guide-table">
             <thead>
-              <tr><th>Game</th><th>Cheer</th><th>Win</th><th>Lose</th></tr>
+              <tr><th>Game</th><th>Cheer</th><th>Why</th><th>Win</th><th>Lose</th></tr>
             </thead>
             <tbody>
               {games.map((game) => {
@@ -98,6 +120,7 @@ export function RootingGuideTable({ games, totalGames }: RootingGuideTableProps)
                   hasGameStarted(game) &&
                   game.awayScore !== null &&
                   game.homeScore !== null;
+                const reason = formatRootingReasons(game.reasons, selectedTeam);
 
                 return (
                   <tr
@@ -133,6 +156,9 @@ export function RootingGuideTable({ games, totalGames }: RootingGuideTableProps)
                         <span className="no-preference">No preference</span>
                       )}
                     </td>
+                    <td className="root-reason">
+                      {reason ?? <span className="no-preference">No race impact</span>}
+                    </td>
                     <td className={impactClass(game.winImpact)}>
                       {formatImpact(game.winImpact)}
                       <PositionImpact current={game.currentPosition} outcome={game.winPosition} />
@@ -149,7 +175,7 @@ export function RootingGuideTable({ games, totalGames }: RootingGuideTableProps)
         </div>
       )}
       <p className="guide-note">
-        Impact is the change, in games, to the clearest current division or Wild Card path. Win and Lose refer to the team in “Cheer.”
+        Impact is the change, in games, at the primary active race boundary. Win and Lose refer to the team in “Cheer.”
       </p>
     </section>
   );
