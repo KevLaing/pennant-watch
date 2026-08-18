@@ -344,7 +344,7 @@ describe("rooting guide", () => {
     assert.match(detRow, /Boo/);
   });
 
-  it("shows a Wild Card position change when games-back impact stays neutral", () => {
+  it("keeps Wild Card position data when the visible impact columns are absent", () => {
     const standings = [
       standing("TB", 70, 20),
       standing("BOS", 60, 30),
@@ -371,7 +371,7 @@ describe("rooting guide", () => {
     assert.equal(games[0].winImpact, 0);
     assert.equal(games[0].currentPosition.wildCardRank, 6);
     assert.equal(games[0].winPosition.wildCardRank, 5);
-    assert.match(markup, /WC ↑1/);
+    assert.doesNotMatch(markup, /WC ↑1|<th>Win<\/th>|<th>Lose<\/th>/);
   });
 
   it("protects Wild Card position when a trailing club plays the division leader", () => {

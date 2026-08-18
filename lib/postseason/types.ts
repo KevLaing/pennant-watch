@@ -1,4 +1,5 @@
 import type { Division, Game, League, Standing, Team } from "../mlb/types";
+import type { NightOutcomeSummary } from "./night/types";
 
 export type RaceObjectiveKind =
   | "MAKE_PLAYOFFS"
@@ -81,6 +82,75 @@ export type RootingReason = {
   impactDirection: "positive" | "negative";
 };
 
+export type RaceKind =
+  | "PLAYOFF"
+  | "WILD_CARD"
+  | "DIVISION"
+  | "BYE"
+  | "TOP_SEED";
+
+export type RequiredResult = {
+  teamId: number;
+  result: "WIN" | "LOSS";
+};
+
+export type RaceConsequence =
+  | {
+      type: "POSITION_GAINED" | "POSITION_LOST";
+      race: RaceKind;
+      fromRank: number;
+      toRank: number;
+    }
+  | {
+      type: "GAP_CLOSED" | "GAP_WIDENED";
+      race: RaceKind;
+      fromGamesBack: number;
+      toGamesBack: number;
+      targetTeamId?: number;
+    }
+  | {
+      type: "LEAD_EXTENDED";
+      race: RaceKind;
+      fromLead: number;
+      toLead: number;
+      targetTeamId?: number;
+      rank?: number;
+    }
+  | {
+      type: "TIE_CREATED";
+      race: RaceKind;
+      targetTeamId?: number;
+    }
+  | {
+      type: "LEAD_TAKEN";
+      race: RaceKind;
+      targetTeamId?: number;
+      lead?: number;
+    }
+  | {
+      type: "CLINCH" | "ELIMINATION_AVOIDED";
+      race: RaceKind;
+    }
+  | {
+      type: "MARGIN_IMPROVED";
+      race: RaceKind;
+      fromValue: number;
+      toValue: number;
+      targetTeamId?: number;
+    }
+  | {
+      type: "POSITION_HELD";
+      race: RaceKind;
+      rank: number;
+    };
+
+export type RootingScenario = {
+  requiredResults: RequiredResult[];
+  consequence: RaceConsequence;
+  additionalConsequences: RaceConsequence[];
+  pairwiseConsequence?: RaceConsequence;
+};
+
 export type RacePosition = {
   divisionRank: number | null;
   wildCardRank: number | null;
@@ -97,6 +167,8 @@ export type RootingGuideEntry = {
   homeScore: number | null;
   rootFor: Team | null;
   reasons: RootingReason[];
+  primaryScenario: RootingScenario | null;
+  alternateScenario: RootingScenario | null;
   winImpact: number;
   loseImpact: number;
   currentPosition: RacePosition;
@@ -110,5 +182,6 @@ export type PennantWatchData = {
   scheduleGameCount: number;
   standings: Standing[];
   raceState: PennantRaceState | null;
+  night: NightOutcomeSummary | null;
   games: RootingGuideEntry[];
 };

@@ -20,11 +20,50 @@ Hypothetical home/away game outcomes
 Priority-aware objective comparison
   ↓
 Rooting recommendation + structured reasons
+  ↓
+Selected-team conditional result
+  ↓
+Recommended external result
+  ↓
+Hypothetical race-state diff
+  ↓
+Concrete daily consequence + “Why” explanation
 ```
 
 Supported objectives are making or defending a playoff spot, winning or defending a division, improving Wild Card seed, earning or defending a bye, and earning or defending the league’s top seed. A club can hold several objectives at once. The primary objective is the unresolved boundary with the greatest postseason consequence—berth, division, bye, top seed, then Wild Card seeding—and remaining objectives are retained as secondary context.
 
 Each game outcome is evaluated independently by rebuilding the selected club’s race state. Outcomes are compared lexicographically across the ordered objectives: crossing or preserving the boundary comes first, then position/rank, then games-relative margins against the relevant boundary clubs. No playoff probability, arbitrary weighted score, or Monte Carlo simulation is used.
+
+`RootingReason` records why a recommended result matters conceptually, such as the Wild Card, division, bye, or top-seed objective. `RootingScenario` retains the broader race consequence and a preferred pairwise consequence when a reliable competitor is known. The Rooting Guide renders that direct relationship—for example, cutting the gap to BAL, pulling even, moving ahead, or extending a lead—rather than claiming a league-wide rank that may depend on other unresolved games. The objective reason remains the fallback when no reliable pairwise comparison is available.
+
+The visible Rooting Guide is intentionally limited to **Game**, **Cheer**, and **Why**. Its competitor comes from the primary objective's affected team when that team participates in the row; selected-team games use the primary objective boundary. Numeric `winImpact`, `loseImpact`, and projected position fields remain in the domain model and API for tests and future leverage analysis, but are not rendered as separate table columns.
+
+For an external game, the primary scenario assumes a selected-team win when its earliest unresolved game is scheduled or live, then applies the recommended external result. Live scores are not projected to a final result. If all selected-team games are final, the most recent final result is included as context without applying it to standings a second time. When no selected-team game exists, the external result is evaluated alone. For doubleheaders, the earliest unresolved game is the conditional “take care of our own business” result; if none remains, the most recent final is used. This conditional explanation deliberately avoids enumerating every combination inside each game row.
+
+### Tonight's outcome space
+
+The overview above the Rooting Guide evaluates the night as a whole. Its relevance rule is deliberately conservative: it includes every scheduled, live, or final game involving at least one club from the selected team's league, including interleague games, and excludes games involving only the other league. Postponed games are excluded. Final games are fixed at their actual winner; every scheduled or live game remains a two-result home/away winner variable. Live scores do not change the enumeration. Only games the MLB feed normalizes as postponed are omitted; any other nonfinal state normalized as scheduled or live remains an unresolved binary result.
+
+```text
+Today's relevant unresolved games
+  ↓
+Enumerate 2^N possible scoreboards
+  ↓
+Apply each scoreboard to standings
+  ↓
+Evaluate the selected team's postseason state
+  ↓
+Compare with the current primary objective
+  ↓
+Aggregate improved / unchanged / worsened,
+best / worst, position distribution, and target success count
+  ↓
+Tonight's Outcome Space overview
+```
+
+Enumeration is deterministic and request-local. The generator uses a bitmask—bit `0` means the away team wins and bit `1` means the home team wins—and the aggregator discards each scenario's standings after evaluation. It retains only aggregate counters plus the best and worst result sets, so even a full 15-game, 32,768-scoreboard slate does not retain 32,768 standings snapshots.
+
+These counts are exhaustive possible result combinations, not probabilities. PennantWatch does not assign win probabilities, convert scenario shares into odds, or use Monte Carlo sampling.
 
 Clinching and elimination flags are deliberately conservative. With a complete 15-team league table, PennantWatch uses 162-game maximum-win bounds and marks a status only when it is guaranteed regardless of ties. The MLB standings response used here does not contain the complete head-to-head and intradivision records needed to apply every official tiebreaker, so tied maximum-win cases remain unresolved rather than being labeled clinched or eliminated. Schedule quirks such as canceled games are likewise not inferred from the standings feed.
 

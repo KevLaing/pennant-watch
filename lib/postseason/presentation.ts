@@ -1,13 +1,15 @@
 import type { Standing, Team } from "../mlb/types";
 import type {
   PennantRaceState,
+  RaceConsequence,
   RaceObjectiveKind,
   RootingReason,
+  RootingScenario,
 } from "./types";
+import { formatGameCount, formatGamesValue } from "./format";
 
-function formatGames(value: number): string {
-  const absolute = Math.abs(value);
-  return Number.isInteger(absolute) ? absolute.toFixed(1) : `${absolute}`;
+function divisionName(team: Team): string {
+  return `${team.league} ${team.division[0]}${team.division.slice(1).toLowerCase()}`;
 }
 
 export function objectiveLabel(
@@ -75,9 +77,9 @@ export function formatRaceSummary(
   const margin = primary?.gamesBack === undefined || !boundary
     ? null
     : primary.gamesBack > 0
-      ? `${formatGames(primary.gamesBack)} games behind ${boundary.team.abbreviation}`
+      ? `${formatGamesValue(primary.gamesBack, { absolute: true })} games behind ${boundary.team.abbreviation}`
       : primary.gamesBack < 0
-        ? `${formatGames(primary.gamesBack)} games ahead of ${boundary.team.abbreviation}`
+        ? `${formatGamesValue(primary.gamesBack, { absolute: true })} games ahead of ${boundary.team.abbreviation}`
         : `Tied with ${boundary.team.abbreviation}`;
 
   return {
@@ -128,4 +130,157 @@ export function formatRootingReasons(
     case "EARN_TOP_SEED": return `Helps ${club} chase the #1 seed`;
     case "DEFEND_TOP_SEED": return `Protects ${club}'s #1 seed`;
   }
+}
+
+function resultText(
+  scenario: RootingScenario,
+  selectedTeam: Team,
+  teams: readonly Team[],
+): string {
+  const byId = new Map(
+    [selectedTeam, ...teams].map((team) => [team.id, team.abbreviation]),
+  );
+  return scenario.requiredResults.map((required) =>
+    `${byId.get(required.teamId) ?? `Team ${required.teamId}`} ${required.result.toLowerCase()}`,
+  ).join(" + ");
+}
+
+function targetAbbreviation(
+  consequence: RaceConsequence,
+  selectedTeam: Team,
+  teams: readonly Team[],
+): string | null {
+  if (!("targetTeamId" in consequence) || consequence.targetTeamId === undefined) {
+    return null;
+  }
+  return [selectedTeam, ...teams].find(
+    (team) => team.id === consequence.targetTeamId,
+  )?.abbreviation ?? null;
+}
+
+function consequenceText(
+  consequence: RaceConsequence,
+  selectedTeam: Team,
+  teams: readonly Team[],
+): string {
+  const club = selectedTeam.abbreviation;
+  const target = targetAbbreviation(consequence, selectedTeam, teams);
+
+  switch (consequence.type) {
+    case "CLINCH":
+      switch (consequence.race) {
+        case "PLAYOFF": return `clinches a playoff berth for ${club}`;
+        case "DIVISION": return `clinches the ${divisionName(selectedTeam)} for ${club}`;
+        case "BYE": return `clinches a first-round bye for ${club}`;
+        case "TOP_SEED": return `clinches the ${selectedTeam.league}'s #1 seed for ${club}`;
+        case "WILD_CARD": return `clinches a Wild Card berth for ${club}`;
+      }
+    case "ELIMINATION_AVOIDED":
+      return `keeps ${club} alive in the ${consequence.race.toLowerCase().replace("_", " ")} race`;
+    case "POSITION_GAINED":
+      switch (consequence.race) {
+        case "WILD_CARD":
+          return consequence.fromRank > 3 && consequence.toRank <= 3
+            ? `puts ${club} into WC${consequence.toRank}`
+            : `moves ${club} up to WC${consequence.toRank}`;
+        case "BYE": return `moves ${club} into the second ${selectedTeam.league} bye`;
+        case "TOP_SEED": return `moves ${club} into the ${selectedTeam.league}'s #1 seed`;
+        case "DIVISION": return `moves ${club} to #${consequence.toRank} in the division`;
+        case "PLAYOFF": return `puts ${club} into the postseason field`;
+      }
+    case "POSITION_LOST":
+      return consequence.race === "WILD_CARD"
+        ? `drops ${club} to WC${consequence.toRank}`
+        : `drops ${club} to #${consequence.toRank} in the ${consequence.race.toLowerCase().replace("_", " ")} race`;
+    case "GAP_CLOSED":
+      switch (consequence.race) {
+        case "WILD_CARD": return `pulls ${club} within ${formatGameCount(consequence.toGamesBack, { absolute: true })} of WC3`;
+        case "DIVISION": return `cuts the division gap to ${formatGameCount(consequence.toGamesBack, { absolute: true })}`;
+        case "BYE": return `cuts the first-round bye gap to ${formatGameCount(consequence.toGamesBack, { absolute: true })}`;
+        case "TOP_SEED": return `cuts the #1 seed gap to ${formatGameCount(consequence.toGamesBack, { absolute: true })}`;
+        case "PLAYOFF": return `cuts the playoff gap to ${formatGameCount(consequence.toGamesBack, { absolute: true })}`;
+      }
+    case "GAP_WIDENED":
+      return target
+        ? `widens ${club}'s gap to ${target} to ${formatGameCount(consequence.toGamesBack, { absolute: true })}`
+        : `widens ${club}'s ${consequence.race.toLowerCase().replace("_", " ")} gap`;
+    case "LEAD_EXTENDED":
+      if (consequence.race === "WILD_CARD") {
+        return `extends ${club}'s WC${consequence.rank ?? 3} cushion to ${formatGameCount(consequence.toLead, { absolute: true })}`;
+      }
+      if (consequence.race === "DIVISION") {
+        return `extends ${club}'s division lead to ${formatGameCount(consequence.toLead, { absolute: true })}`;
+      }
+      if (consequence.race === "BYE") {
+        return `extends ${club}'s bye cushion to ${formatGameCount(consequence.toLead, { absolute: true })}`;
+      }
+      return `extends ${club}'s #1 seed lead to ${formatGameCount(consequence.toLead, { absolute: true })}`;
+    case "TIE_CREATED":
+      switch (consequence.race) {
+        case "WILD_CARD": return `ties ${club} for WC3`;
+        case "DIVISION": return `ties ${club} for the ${divisionName(selectedTeam)} lead`;
+        case "BYE": return `ties ${club} for the second ${selectedTeam.league} bye`;
+        case "TOP_SEED": return `ties ${club} for the ${selectedTeam.league}'s #1 seed`;
+        case "PLAYOFF": return `ties ${club} at the playoff boundary`;
+      }
+    case "LEAD_TAKEN":
+      return consequence.race === "DIVISION"
+        ? `puts ${club} into the ${divisionName(selectedTeam)} lead`
+        : `puts ${club} in front of ${target ?? "the race boundary"}`;
+    case "MARGIN_IMPROVED":
+      if (target && consequence.toValue < 0) {
+        return `pulls ${club} within ${formatGameCount(-consequence.toValue, { absolute: true })} of ${target}`;
+      }
+      if (target && consequence.toValue > 0) {
+        return `moves ${club} ${formatGameCount(consequence.toValue, { absolute: true })} ahead of ${target}`;
+      }
+      return `improves ${club}'s ${consequence.race.toLowerCase().replace("_", " ")} margin`;
+    case "POSITION_HELD":
+      if (consequence.race === "WILD_CARD") return `keeps ${club} in WC${consequence.rank}`;
+      if (consequence.race === "DIVISION") return `keeps ${club} in the division lead`;
+      return `keeps ${club} at #${consequence.rank} in the ${consequence.race.toLowerCase().replace("_", " ")} race`;
+  }
+}
+
+function pairwiseConsequenceText(
+  consequence: RaceConsequence,
+  selectedTeam: Team,
+  teams: readonly Team[],
+): string | null {
+  const club = selectedTeam.abbreviation;
+  const target = targetAbbreviation(consequence, selectedTeam, teams);
+  if (!target) return null;
+
+  switch (consequence.type) {
+    case "GAP_CLOSED":
+      return `cuts the gap to ${target} to ${formatGameCount(consequence.toGamesBack, { absolute: true })}`;
+    case "GAP_WIDENED":
+      return `widens ${club}'s gap to ${target} to ${formatGameCount(consequence.toGamesBack, { absolute: true })}`;
+    case "TIE_CREATED":
+      return `pulls ${club} even with ${target}`;
+    case "LEAD_TAKEN":
+      return consequence.lead === undefined
+        ? null
+        : `moves ${club} ${formatGameCount(consequence.lead, { absolute: true })} ahead of ${target}`;
+    case "LEAD_EXTENDED":
+      return `extends ${club}'s lead over ${target} to ${formatGameCount(consequence.toLead, { absolute: true })}`;
+    default:
+      return null;
+  }
+}
+
+export function formatRootingScenario(
+  scenario: RootingScenario,
+  selectedTeam: Team,
+  teams: readonly Team[],
+): string {
+  const results = resultText(scenario, selectedTeam, teams);
+  const consequence = scenario.pairwiseConsequence
+    ? pairwiseConsequenceText(
+        scenario.pairwiseConsequence,
+        selectedTeam,
+        teams,
+      ) ?? consequenceText(scenario.consequence, selectedTeam, teams)
+    : consequenceText(scenario.consequence, selectedTeam, teams);
+  return `${results} ${consequence}.`;
 }

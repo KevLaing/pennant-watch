@@ -4,6 +4,7 @@ import type { CSSProperties } from "react";
 import { RootingGuideTable } from "@/components/RootingGuideTable";
 import { StandingsTable } from "@/components/StandingsTable";
 import { TeamPicker } from "@/components/TeamPicker";
+import { TonightOverview } from "@/components/TonightOverview";
 import { MlbApiError } from "@/lib/mlb/client";
 import { formatBaseballDate, getBaseballDate } from "@/lib/mlb/date";
 import { getTeamByAbbreviation } from "@/lib/mlb/teams";
@@ -101,10 +102,17 @@ export default async function Home() {
               </div>
               <span className="as-of">Games dated {data.date}</span>
             </div>
+            {data.night && (
+              <TonightOverview
+                selectedTeam={selectedTeam}
+                summary={data.night}
+              />
+            )}
             <RootingGuideTable
               games={data.games}
               totalGames={data.scheduleGameCount}
               selectedTeam={selectedTeam}
+              teams={data.standings.map((standing) => standing.team)}
             />
             <StandingsTable
               selectedTeam={selectedTeam}

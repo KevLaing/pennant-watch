@@ -6,6 +6,10 @@ import {
   objectiveComparisons,
 } from "./outcomes";
 import { createPennantRaceState } from "./objectives";
+import {
+  buildGameScenarios,
+  findSelectedTeamScenarioGame,
+} from "./scenarios";
 import { calculateRacePosition, relativeGames } from "./standings";
 import type {
   PennantRaceState,
@@ -57,6 +61,36 @@ function activeObjectives(state: PennantRaceState) {
   ];
 }
 
+function scenarioCompetitorId(
+  state: PennantRaceState,
+  selectedTeamId: number,
+  game: Game,
+  reasons: readonly RootingReason[],
+): number | null {
+  const selectedTeamGame = game.awayTeam.id === selectedTeamId ||
+    game.homeTeam.id === selectedTeamId;
+  if (selectedTeamGame) {
+    return state.primaryObjective?.boundaryTeamIds[0] ??
+      state.primaryObjective?.targetTeamIds[0] ??
+      null;
+  }
+
+  const primaryAffected = reasons.find(
+    (reason) => reason.objective === state.primaryObjective?.kind &&
+      reason.affectedTeamId !== undefined,
+  )?.affectedTeamId;
+  if (primaryAffected !== undefined) return primaryAffected;
+  const affected = reasons.find(
+    (reason) => reason.affectedTeamId !== undefined,
+  )?.affectedTeamId;
+  if (affected !== undefined) return affected;
+
+  const participantIds = new Set([game.awayTeam.id, game.homeTeam.id]);
+  return activeObjectives(state).flatMap(
+    (objective) => objective.targetTeamIds,
+  ).find((teamId) => participantIds.has(teamId)) ?? null;
+}
+
 function activeRaceMargin(
   standings: readonly Standing[],
   state: PennantRaceState,
@@ -104,11 +138,6 @@ function rootingReasons(
   });
 }
 
-export function formatImpact(impact: number): string {
-  if (impact > 0) return `+${impact}`;
-  return `${impact}`;
-}
-
 export function buildRootingGuide(
   selectedTeam: Team,
   standings: readonly Standing[],
@@ -134,6 +163,8 @@ export function buildRootingGuide(
       homeScore: game.homeScore,
       rootFor: null,
       reasons: [],
+      primaryScenario: null,
+      alternateScenario: null,
       winImpact: 0,
       loseImpact: 0,
       currentPosition,
@@ -143,8 +174,13 @@ export function buildRootingGuide(
   }
 
   const baselineMargin = activeRaceMargin(standings, raceState);
+  const relevantGames = [...uniqueRelevantGames.values()];
+  const selectedScenarioGame = findSelectedTeamScenarioGame(
+    relevantGames,
+    selectedTeam.id,
+  );
 
-  return [...uniqueRelevantGames.values()].map((game) => {
+  return relevantGames.map((game) => {
     const homeOutcomeStandings = applyGameOutcome(standings, game, game.homeTeam);
     const awayOutcomeStandings = applyGameOutcome(standings, game, game.awayTeam);
     const homeOutcome = evaluatePostseasonOutcome(homeOutcomeStandings, raceState);
@@ -194,6 +230,21 @@ export function buildRootingGuide(
       reasons = rootingReasons(raceState, awayOutcome, homeOutcome, game, rootFor);
     }
 
+    const { primaryScenario, alternateScenario } = buildGameScenarios({
+      standings,
+      raceState,
+      selectedTeam,
+      selectedGame: selectedScenarioGame,
+      guideGame: game,
+      rootFor,
+      competitorTeamId: scenarioCompetitorId(
+        raceState,
+        selectedTeam.id,
+        game,
+        reasons,
+      ),
+    });
+
     return {
       gamePk: game.gamePk,
       gameDate: game.gameDate,
@@ -204,6 +255,8 @@ export function buildRootingGuide(
       homeScore: game.homeScore,
       rootFor,
       reasons,
+      primaryScenario,
+      alternateScenario,
       winImpact,
       loseImpact,
       currentPosition,

@@ -3,6 +3,7 @@ import { normalizeSchedule, normalizeStandings } from "./mlb/normalize";
 import type { Team } from "./mlb/types";
 import { buildRootingGuide } from "./postseason/rootingGuide";
 import { createPennantRaceState } from "./postseason/objectives";
+import { buildNightOutcomeSummary } from "./postseason/night/summarizeNight";
 import type { PennantWatchData } from "./postseason/types";
 
 export async function getPennantWatchData(
@@ -25,6 +26,7 @@ export async function getPennantWatchData(
     scheduleGameCount: schedule.length,
     standings: leagueStandings,
     raceState: createPennantRaceState(leagueStandings, team.id),
+    night: buildNightOutcomeSummary(team, standings, schedule),
     games: buildRootingGuide(team, standings, schedule),
   };
 }

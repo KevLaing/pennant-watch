@@ -1,18 +1,20 @@
 import { BASEBALL_TIME_ZONE } from "@/lib/mlb/date";
 import type { Team } from "@/lib/mlb/types";
-import { formatRootingReasons } from "@/lib/postseason/presentation";
 import {
-  formatImpact,
+  formatRootingReasons,
+  formatRootingScenario,
+} from "@/lib/postseason/presentation";
+import {
   hasGameStarted,
   pickScoreState,
 } from "@/lib/postseason/rootingGuide";
 import type { RootingGuideEntry } from "@/lib/postseason/types";
-import type { RacePosition } from "@/lib/postseason/standings";
 
 type RootingGuideTableProps = {
   games: RootingGuideEntry[];
   totalGames: number;
   selectedTeam?: Team;
+  teams?: readonly Team[];
 };
 
 const timeFormatter = new Intl.DateTimeFormat("en-US", {
@@ -27,75 +29,16 @@ function gameStatus(game: RootingGuideEntry): string {
   return game.status.detail;
 }
 
-function impactClass(value: number): string {
-  if (value > 0) return "impact impact--good";
-  if (value < 0) return "impact impact--bad";
-  return "impact impact--neutral";
-}
-
-function PositionImpact({
-  current,
-  outcome,
-}: {
-  current: RacePosition;
-  outcome: RacePosition;
-}) {
-  if (
-    current.wildCardRank === null &&
-    outcome.wildCardRank === null &&
-    current.leagueSeed !== null &&
-    outcome.leagueSeed !== null &&
-    current.leagueSeed !== outcome.leagueSeed
-  ) {
-    const change = current.leagueSeed - outcome.leagueSeed;
-    return (
-      <small className={`position-impact position-impact--${change > 0 ? "good" : "bad"}`}>
-        Seed {change > 0 ? "↑" : "↓"}{Math.abs(change)}
-      </small>
-    );
-  }
-
-  if (current.wildCardRank !== null && outcome.wildCardRank === null) {
-    return <small className="position-impact position-impact--good">Division lead</small>;
-  }
-
-  if (current.wildCardRank !== null && outcome.wildCardRank !== null) {
-    const change = current.wildCardRank - outcome.wildCardRank;
-    if (change !== 0) {
-      return (
-        <small className={`position-impact position-impact--${change > 0 ? "good" : "bad"}`}>
-          WC {change > 0 ? "↑" : "↓"}{Math.abs(change)}
-        </small>
-      );
-    }
-  }
-
-  if (current.divisionRank !== null && outcome.divisionRank !== null) {
-    const change = current.divisionRank - outcome.divisionRank;
-    if (change !== 0) {
-      return (
-        <small className={`position-impact position-impact--${change > 0 ? "good" : "bad"}`}>
-          DIV {change > 0 ? "↑" : "↓"}{Math.abs(change)}
-        </small>
-      );
-    }
-  }
-
-  return null;
-}
-
 export function RootingGuideTable({
   games,
   totalGames,
   selectedTeam,
+  teams = [],
 }: RootingGuideTableProps) {
   return (
     <section className="guide-section" aria-labelledby="guide-heading">
       <div className="section-heading">
-        <div>
-          <p className="eyebrow">Today&apos;s leverage</p>
-          <h2 id="guide-heading">Rooting guide</h2>
-        </div>
+        <h2 id="guide-heading">Rooting guide</h2>
         <span className="game-count">{games.length} {games.length === 1 ? "game" : "games"}</span>
       </div>
 
@@ -111,7 +54,11 @@ export function RootingGuideTable({
         <div className="guide-table-wrap">
           <table className="guide-table">
             <thead>
-              <tr><th>Game</th><th>Cheer</th><th>Why</th><th>Win</th><th>Lose</th></tr>
+              <tr>
+                <th scope="col">Game</th>
+                <th scope="col">Cheer</th>
+                <th scope="col">Why</th>
+              </tr>
             </thead>
             <tbody>
               {games.map((game) => {
@@ -120,7 +67,13 @@ export function RootingGuideTable({
                   hasGameStarted(game) &&
                   game.awayScore !== null &&
                   game.homeScore !== null;
-                const reason = formatRootingReasons(game.reasons, selectedTeam);
+                const reason = selectedTeam && game.primaryScenario
+                  ? formatRootingScenario(
+                      game.primaryScenario,
+                      selectedTeam,
+                      [game.awayTeam, game.homeTeam, ...teams],
+                    )
+                  : formatRootingReasons(game.reasons, selectedTeam);
 
                 return (
                   <tr
@@ -159,14 +112,6 @@ export function RootingGuideTable({
                     <td className="root-reason">
                       {reason ?? <span className="no-preference">No race impact</span>}
                     </td>
-                    <td className={impactClass(game.winImpact)}>
-                      {formatImpact(game.winImpact)}
-                      <PositionImpact current={game.currentPosition} outcome={game.winPosition} />
-                    </td>
-                    <td className={impactClass(game.loseImpact)}>
-                      {formatImpact(game.loseImpact)}
-                      <PositionImpact current={game.currentPosition} outcome={game.losePosition} />
-                    </td>
                   </tr>
                 );
               })}
@@ -174,9 +119,6 @@ export function RootingGuideTable({
           </table>
         </div>
       )}
-      <p className="guide-note">
-        Impact is the change, in games, at the primary active race boundary. Win and Lose refer to the team in “Cheer.”
-      </p>
     </section>
   );
 }
